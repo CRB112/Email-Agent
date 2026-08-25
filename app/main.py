@@ -1,7 +1,11 @@
+import asyncio
 import os
 from dotenv import load_dotenv
 from google import genai
+
 from config.config import getPrompt
+from microsoftGraph.email import getEmails
+from parser.parser import parseEmailsWithJson
 
 load_dotenv()
 
@@ -10,10 +14,8 @@ def main():
     chat = client.chats.create(model="gemini-3.6-flash",
                                config={'system_instruction' : getPrompt()})
 
-    msg = input("What would you like to say?")
+    emails = asyncio.run(getEmails())
+    parseEmailsWithJson(emails)
 
-    response = chat.send_message(msg)
-
-    print(response.text)
 if __name__ == "__main__":
     main()
