@@ -5,7 +5,7 @@ from google import genai
 
 from config.config import getPrompt
 from microsoftGraph.email import getEmails
-from parser.parser import parseEmailsWithJson
+from parser.parser import parseEmailsWithJson, parseUserOption
 
 load_dotenv()
 
@@ -15,6 +15,7 @@ def main():
                                config={'system_instruction' : getPrompt()})
 
     emails = asyncio.run(getEmails())
+    parseUserOption()
     parseEmailsWithJson(emails)
 
 if __name__ == "__main__":

@@ -1,40 +1,13 @@
 {
-  "version": 1,
-  "defaults": {
-    "action": "leave",
-    "mark_as_read": false
-  },
-  "rules": [
+  "setting" : 1,
+  "rules" : [
     {
-      "name": "Delete obvious spam",
-      "enabled": true,
-      "priority": 10,
-      "match": {
-        "sender_domains": [
-          "spam-example.com"
-        ],
-        "subject_contains_any": [
-          "you won",
-          "claim your prize"
-        ]
-      },
-      "actions": {
-        "delete": true
-      }
-    },
-    {
-        "name": "Mark Microsoft as Urgent",
-        "enabled" : true,
-        "priority" : 1,
-        "match": {
-            "sender_addresses": [
-                "account-security-noreply@accountprotection.microsoft.com"
-            ]
+      "name" : "Check SUBJ",
+      "type" : "match_subject",
+      "settings" : {
+          "Sub" : "Freaky"
         },
-        "actions": {
-            "flag" : true,
-            "importance": "high"
-        }
+      "priority" : 1
     }
   ]
 }
