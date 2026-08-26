@@ -1,6 +1,8 @@
 from msgraph.generated.users.item.messages.item.move.move_post_request_body import (
     MovePostRequestBody,
 )
+from msgraph.generated.models.message import Message
+from msgraph.generated.models.importance import Importance
 
 
 class Modify:
@@ -31,6 +33,24 @@ class Move(Modify):
             .move
             .post(request_body)
         )
+
+class Mark(Modify):
+    def __init__(self, settings : dict):
+        super().__init__(settings)
+        self.markType = settings["Mark_type"]
+        self.markOp = settings.get("Mark_op", None)
+    async def modify(self, email, g_client):
+        request_body = Message()
+        if self.markType == "Read":
+            request_body.is_read = True
+        elif self.markType == "Importance":
+            request_body.importance = Importance(self.markOp.lower())
+
+        return await (
+            g_client.me.messages.by_message_id(email).patch(request_body)
+        )
+
+
 
 MODIFY_CLASSES = {
     "Delete" : Delete,
