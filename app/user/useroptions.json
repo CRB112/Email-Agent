@@ -11,6 +11,19 @@
           "Delete" : {}
         },
       "priority" : 1
+    },
+    {
+      "name" : "Move Email",
+      "type" : "match_subject",
+      "settings" : {
+        "Sub" : "Zoinks"
+      },
+      "modify" : {
+        "Move" : {
+          "Folder" : "archive"
+        }
+      },
+      "priority" : 2
     }
   ]
 }
