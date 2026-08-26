@@ -47,12 +47,13 @@ class Mark(Modify):
             request_body.importance = Importance(self.markOp.lower())
 
         return await (
-            g_client.me.messages.by_message_id(email).patch(request_body)
+            g_client.me.messages.by_message_id(email.id).patch(request_body)
         )
 
 
 
 MODIFY_CLASSES = {
     "Delete" : Delete,
-    "Move" : Move
+    "Move" : Move,
+    "Mark" : Mark
 }

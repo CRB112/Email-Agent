@@ -39,7 +39,6 @@ async def parseEmailsWithJson(emails):
         for rule, modify in rules:
             if rule.testMatch(email):
                 for m in modify:
-                    print("Deleted")
                     await m.modify(email, graph_client)
                     if isinstance(m, Delete):
                         deleted = True

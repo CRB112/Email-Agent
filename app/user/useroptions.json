@@ -24,6 +24,20 @@
         }
       },
       "priority" : 2
+    },
+    {
+      "name" : "Mark work",
+      "type" : "match_subject",
+      "settings" : {
+        "Sub" : "Work"
+      },
+      "modify" : {
+        "Mark" : {
+          "Mark_type" : "Importance",
+          "Mark_op" : "normal"
+        }
+      },
+      "priority" : 3
     }
   ]
 }
