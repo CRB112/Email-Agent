@@ -14,7 +14,6 @@ class Match_sub(Match):
         self.sub = settings.get("Sub")
 
     def testMatch(self, email) -> bool:
-        print("ASDkjdsaflkjfdz")
         return email.subject == self.sub
         
 class Match_sender:
@@ -22,7 +21,6 @@ class Match_sender:
         self.sender = settings["Sender"]
 
     def testMatch(self, email) -> bool:
-        print ("BBBBBBBBBB")
         return email.from_.email_adress.address
 
 COMMAND_CLASSES = {
