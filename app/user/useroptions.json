@@ -2,42 +2,19 @@
   "setting" : 1,
   "rules" : [
     {
-      "name" : "Check SUBJ",
-      "type" : "match_subject",
+      "name" : "Check BODY",
+      "type" : "match_body",
       "settings" : {
-          "Sub" : "Freaky"
+          "Words" : [
+            "Bungo",
+            "Frungo"
+          ],
+          "Type" : "Any"
         },
         "modify" : {
           "Delete" : {}
         },
       "priority" : 1
-    },
-    {
-      "name" : "Move Email",
-      "type" : "match_subject",
-      "settings" : {
-        "Sub" : "Zoinks"
-      },
-      "modify" : {
-        "Move" : {
-          "Folder" : "archive"
-        }
-      },
-      "priority" : 2
-    },
-    {
-      "name" : "Mark work",
-      "type" : "match_subject",
-      "settings" : {
-        "Sub" : "Work"
-      },
-      "modify" : {
-        "Mark" : {
-          "Mark_type" : "Importance",
-          "Mark_op" : "normal"
-        }
-      },
-      "priority" : 3
     }
   ]
 }

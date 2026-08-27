@@ -41,18 +41,21 @@ class Match_body:
         self.matchT = settings.get("Type", "All")
     def testMatch(self, email):
         body = email.body.content if email.body and email.body.content else ""
+        print(body)
         if self.matchT == "Any":
             for word in self.matchL:
-                if word in body:
+                if body.find(word) != -1:
                     return True
-        if self.matchT == "All":
-            for word in self.matchT:
-                if word not in body:
+        elif self.matchT == "All":
+            for word in self.matchL:
+                print(word)
+                if body.find(word) == -1:
                     return False
             return True
 
 COMMAND_CLASSES = {
     "match_subject" : Match_sub,
     "match_sender" : Match_sender,
-    "match_domain" : Match_domain
+    "match_domain" : Match_domain,
+    "match_body" : Match_body
 }
