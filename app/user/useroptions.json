@@ -1,20 +1,21 @@
 {
-  "setting" : 1,
-  "rules" : [
+  "setting": 1,
+  "rules": [
     {
-      "name" : "Check BODY",
-      "type" : "match_body",
-      "settings" : {
-          "Words" : [
-            "Bungo",
-            "Frungo"
-          ],
-          "Type" : "Any"
-        },
-        "modify" : {
-          "Delete" : {}
-        },
-      "priority" : 1
+      "name": "Delete invoice emails",
+      "type": "match_subject_contains",
+      "settings": {
+        "Words": [
+          "invoice",
+          "payment due"
+        ],
+        "Type": "Any",
+        "CaseSensitive": false
+      },
+      "modify": {
+        "Delete": {}
+      },
+      "priority": 1
     }
   ]
 }
