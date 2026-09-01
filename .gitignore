@@ -1,1 +1,8 @@
 .venv/
+.env
+email-sifting-auth.json
+__pycache__
+build/
+dist/
+*.pyc
+__pycache__/

@@ -1,13 +1,35 @@
 import json
-import asyncio
+import shutil
+import sys
 from pathlib import Path
-from parser.MatchCommands import COMMAND_CLASSES
-from parser.ModifyCommands import MODIFY_CLASSES, Delete
-from microsoftGraph.email import graph_client
+from app.parser.MatchCommands import COMMAND_CLASSES
+from app.parser.ModifyCommands import MODIFY_CLASSES, Delete
 
-OPTIONS_FILE = Path(__file__).parent.parent / "user" / "useroptions.json"
+APP_NAME = "EmailSiftingAgent"
+USER_OPTIONS_DIR = Path.home() / ".config" / APP_NAME
+OPTIONS_FILE = USER_OPTIONS_DIR / "useroptions.json"
+
+if getattr(sys, "frozen", False):
+    DEFAULT_OPTIONS_FILE = (
+        Path(sys._MEIPASS) / "app" / "user" / "useroptions.json"
+    )
+else:
+    DEFAULT_OPTIONS_FILE = (
+        Path(__file__).resolve().parent.parent / "user" / "useroptions.json"
+    )
+
+
+def ensureUserOptions() -> None:
+    """Create the persistent user options file from the bundled default."""
+
+    USER_OPTIONS_DIR.mkdir(parents=True, exist_ok=True)
+
+    if not OPTIONS_FILE.exists():
+        shutil.copyfile(DEFAULT_OPTIONS_FILE, OPTIONS_FILE)
 
 def loadUserOptions() -> dict:
+    ensureUserOptions()
+
     with OPTIONS_FILE.open("r", encoding="utf-8") as f:
         return json.load(f)
 
@@ -31,7 +53,7 @@ def parseUserOptions():
 
     return rulesObj
 
-async def parseEmailsWithJson(emails):
+async def parseEmailsWithJson(emails, graph_client):
     rules = parseUserOptions()
 
     for email in emails:
