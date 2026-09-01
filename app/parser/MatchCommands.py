@@ -10,7 +10,7 @@ class Match(ABC):
 
 
 
-class Match_sub(Match):
+class Match_subject(Match):
     def __init__(self, settings: dict):
         self.sub = settings.get("Sub")
 
@@ -83,10 +83,12 @@ class Match_sender_contains(Match_contains):
 
 
 COMMAND_CLASSES = {
-    "match_subject" : Match_sub,
+    "match_subject" : Match_subject,
     "match_sender" : Match_sender,
     "match_domain" : Match_domain,
+    # Keep the old name so previously saved rules continue to work.
     "match_body" : Match_body_contains,
+    "match_body_contains" : Match_body_contains,
     "match_subject_contains" : Match_subject_contains,
     "match_sender_contains" : Match_sender_contains
 }

@@ -33,6 +33,18 @@ def loadUserOptions() -> dict:
     with OPTIONS_FILE.open("r", encoding="utf-8") as f:
         return json.load(f)
 
+
+def saveUserOptions(options: dict) -> None:
+    """Safely replace the persistent user options file."""
+    ensureUserOptions()
+    temporary_file = OPTIONS_FILE.with_suffix(".tmp")
+
+    with temporary_file.open("w", encoding="utf-8") as file:
+        json.dump(options, file, indent=2)
+        file.write("\n")
+
+    temporary_file.replace(OPTIONS_FILE)
+
 def parseUserOptions():
     options = loadUserOptions()
     rules = sorted(
@@ -55,16 +67,22 @@ def parseUserOptions():
 
 async def parseEmailsWithJson(emails, graph_client):
     rules = parseUserOptions()
+    num_emails = 0
+    num_modifications = 0
 
     for email in emails:
         deleted = False
         for rule, modify in rules:
             if rule.testMatch(email):
+                num_emails += 1
                 for m in modify:
                     await m.modify(email, graph_client)
+                    num_modifications += 1
                     if isinstance(m, Delete):
                         deleted = True
                         break
 
             if deleted:
                 break
+
+    return num_emails, num_modifications

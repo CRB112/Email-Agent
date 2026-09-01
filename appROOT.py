@@ -1,3 +1,4 @@
+import asyncio
 import tkinter as tk
 from pathlib import Path
 from app.microsoftGraph.email import authenticate
@@ -13,6 +14,8 @@ class MainWindow(tk.Tk):
         self.title("Email Sifting Agent")
         self.geometry("600x400")
         self.graph_client = None
+        self.async_loop = asyncio.new_event_loop()
+        self.protocol("WM_DELETE_WINDOW", self.close)
 
         container = tk.Frame(self)
         container.pack(fill="both", expand=True)
@@ -45,6 +48,15 @@ class MainWindow(tk.Tk):
             page.on_show()
 
         page.tkraise()
+
+    def run_async(self, operation):
+        """Run Graph operations on the application's persistent event loop."""
+        return self.async_loop.run_until_complete(operation)
+
+    def close(self):
+        if not self.async_loop.is_closed():
+            self.async_loop.close()
+        self.destroy()
 
 
 if __name__ == "__main__":

@@ -20,9 +20,12 @@ CLIENT_ID = "4b454fd8-c82e-4595-b8c6-7a960fd2c4ae"
 TENANT_ID = "common"
 
 
-def authenticate():
-    """Authenticate the user and return a Microsoft Graph client."""
+def logout():
+    """Remove this application's saved Microsoft authentication record."""
+    AUTH_RECORD_FILE.unlink(missing_ok=True)
 
+
+def authenticate():
     cache_options = TokenCachePersistenceOptions(
         name="EmailSiftingAgent",
         allow_unencrypted_storage=True,
@@ -59,8 +62,6 @@ def authenticate():
 
 
 async def getEmails(graph_client):
-    """Return the newest messages from the signed-in user's inbox."""
-
     query = MessagesRequestBuilder.MessagesRequestBuilderGetQueryParameters(
         top=MAX_EMAILS,
         orderby=["receivedDateTime desc"],
