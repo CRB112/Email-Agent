@@ -1,5 +1,9 @@
 # -*- mode: python ; coding: utf-8 -*-
 
+from PyInstaller.utils.hooks import collect_data_files
+
+
+ttkbootstrap_data = collect_data_files("ttkbootstrap")
 
 analysis = Analysis(
     ["appROOT.py"],
@@ -8,6 +12,7 @@ analysis = Analysis(
     datas=[
         ("resources", "resources"),
         ("app/user/useroptions.json", "app/user"),
+        *ttkbootstrap_data,
     ],
     hiddenimports=[
         "app",

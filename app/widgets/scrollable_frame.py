@@ -1,14 +1,18 @@
 """A reusable vertically scrollable Tkinter frame."""
 
 import tkinter as tk
-from tkinter import ttk
+import ttkbootstrap as ttk
 
 
 class ScrollableFrame(ttk.Frame):
     def __init__(self, parent, **kwargs):
         super().__init__(parent, **kwargs)
 
-        self.canvas = tk.Canvas(self, highlightthickness=0)
+        self.canvas = tk.Canvas(
+            self,
+            highlightthickness=0,
+            background=ttk.Style().colors.bg,
+        )
         scrollbar = ttk.Scrollbar(
             self, orient="vertical", command=self.canvas.yview
         )
@@ -30,6 +34,10 @@ class ScrollableFrame(ttk.Frame):
     def clear(self):
         for child in self.content.winfo_children():
             child.destroy()
+
+    def sync_theme(self):
+        """Match the classic Canvas background to the active ttk theme."""
+        self.canvas.configure(background=ttk.Style().colors.bg)
 
     def _update_scroll_region(self, _event):
         self.canvas.configure(scrollregion=self.canvas.bbox("all"))

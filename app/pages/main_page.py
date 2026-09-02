@@ -2,7 +2,8 @@
 
 import tkinter as tk
 from datetime import datetime, timezone
-from tkinter import ttk
+
+import ttkbootstrap as ttk
 
 from app.microsoftGraph.email import getEmails, logout as logout_user
 from app.parser.parser import (
@@ -14,7 +15,7 @@ from app.rules.definitions import create_rule_template
 from app.widgets.rule_card import RuleCard
 from app.widgets.rule_editor import RuleEditor
 from app.widgets.scrollable_frame import ScrollableFrame
-class MainPage(tk.Frame):
+class MainPage(ttk.Frame):
     def __init__(self, parent, controller):
         super().__init__(parent)
         self.controller = controller
@@ -22,9 +23,10 @@ class MainPage(tk.Frame):
         self.emails_loaded = False
         self.sift_mode = tk.StringVar(value="since_last")
         self.max_emails = tk.StringVar(value="100")
+        self.dark_mode = tk.BooleanVar(value=self._saved_dark_mode())
 
-        self.notebook = ttk.Notebook(self)
-        self.notebook.pack(fill="both", expand=True)
+        self.notebook = ttk.Notebook(self, bootstyle="primary")
+        self.notebook.pack(fill="both", expand=True, padx=16, pady=16)
 
         self.sift_tab = ttk.Frame(self.notebook)
         self.rules_tab = ttk.Frame(self.notebook)
@@ -43,21 +45,28 @@ class MainPage(tk.Frame):
         self.notebook.bind("<<NotebookTabChanged>>", self._on_tab_changed)
 
     def _build_logout_button(self):
-        logout_button = tk.Button(
+        logout_button = ttk.Button(
             self,
             text="Log out",
             command=self.logout,
-            width=8,
-            pady=0,
+            bootstyle="danger outline",
+            padding=(10, 2),
         )
-        logout_button.place(relx=1.0, anchor="ne")
+        logout_button.place(relx=1.0, x=-26, y=19, anchor="ne")
 
     def _build_sift_tab(self):
-        tk.Label(
+        ttk.Label(
             self.sift_tab,
-            text="Home Page",
-            font=("Mouldy Cheese", 24),
-        ).pack(pady=(55, 20))
+            text="Sift your inbox",
+            font=("Mouldy Cheese", 30),
+            bootstyle="primary",
+        ).pack(pady=(48, 8))
+
+        ttk.Label(
+            self.sift_tab,
+            text="Choose which messages to process, then run your rules.",
+            bootstyle="secondary",
+        ).pack(pady=(0, 24))
 
         scope = ttk.LabelFrame(
             self.sift_tab,
@@ -86,9 +95,11 @@ class MainPage(tk.Frame):
             self.sift_tab,
             text="Go",
             command=self.attempt_go,
+            bootstyle="success",
+            padding=(34, 10),
         ).pack(pady=30)
 
-        self.status = tk.Label(
+        self.status = ttk.Label(
             self.sift_tab,
             text="",
             justify="center",
@@ -98,12 +109,13 @@ class MainPage(tk.Frame):
 
     def _build_rules_tab(self):
         heading = ttk.Frame(self.rules_tab)
-        heading.pack(fill="x", padx=30, pady=(55, 15))
+        heading.pack(fill="x", padx=30, pady=(40, 18))
 
-        tk.Label(
+        ttk.Label(
             heading,
             text="Rules",
-            font=("Mouldy Cheese", 24),
+            font=("Mouldy Cheese", 30),
+            bootstyle="primary",
         ).grid(row=0, column=0, sticky="w")
 
         email_limit = ttk.Frame(heading)
@@ -122,12 +134,14 @@ class MainPage(tk.Frame):
             email_limit,
             text="Save",
             command=self.save_max_emails,
+            bootstyle="secondary outline",
         ).grid(row=1, column=2)
 
         ttk.Button(
             heading,
             text="Add rule",
             command=self.show_new_rule_editor,
+            bootstyle="primary",
         ).grid(row=1, column=1, sticky="e", pady=(10, 0))
 
         heading.grid_columnconfigure(1, weight=1)
@@ -143,16 +157,62 @@ class MainPage(tk.Frame):
         self.rules_list.pack(fill="both", expand=True)
 
     def _build_settings_tab(self):
-        tk.Label(
+        ttk.Label(
             self.settings_tab,
             text="Settings",
-            font=("Mouldy Cheese", 24),
+            font=("Mouldy Cheese", 30),
+            bootstyle="primary",
         ).pack(pady=(70, 20))
 
         ttk.Label(
             self.settings_tab,
-            text="Application settings will go here.",
-        ).pack()
+            text="Personalize how the application looks and behaves.",
+            bootstyle="secondary",
+        ).pack(pady=(0, 24))
+
+        appearance = ttk.LabelFrame(
+            self.settings_tab,
+            text="Appearance",
+            padding=20,
+        )
+        appearance.pack(fill="x", padx=80)
+
+        ttk.Label(
+            appearance,
+            text="Dark mode",
+            font=("TkDefaultFont", 11, "bold"),
+        ).grid(row=0, column=0, sticky="w")
+        ttk.Label(
+            appearance,
+            text="Use a darker color palette throughout the application.",
+            bootstyle="secondary",
+        ).grid(row=1, column=0, sticky="w", pady=(3, 0))
+
+        ttk.Checkbutton(
+            appearance,
+            variable=self.dark_mode,
+            command=self.toggle_dark_mode,
+            bootstyle="success round toggle",
+        ).grid(row=0, column=1, rowspan=2, sticky="e", padx=(20, 0))
+
+        appearance.grid_columnconfigure(0, weight=1)
+
+    @staticmethod
+    def _saved_dark_mode():
+        try:
+            return bool(loadUserOptions().get("dark_mode", False))
+        except Exception:
+            return False
+
+    def toggle_dark_mode(self):
+        enabled = bool(self.dark_mode.get())
+        options = loadUserOptions()
+        options["dark_mode"] = enabled
+        saveUserOptions(options)
+
+        theme = "darkly" if enabled else "flatly"
+        self.controller.style.theme_use(theme)
+        self.rules_list.sync_theme()
 
     def _on_tab_changed(self, _event):
         selected_tab = self.notebook.tab(self.notebook.select(), "text")
@@ -224,6 +284,7 @@ class MainPage(tk.Frame):
             self.rules_list.content,
             text="New rule",
             padding=6,
+            bootstyle="primary",
         )
         editor_box.pack(fill="x", padx=4, pady=4)
 

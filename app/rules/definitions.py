@@ -45,6 +45,11 @@ ACTION_DEFINITIONS = {
 }
 
 
+FIELD_CHOICES = {
+    "Type": ("Any", "All"),
+}
+
+
 def create_rule_template():
     """Return a fresh, valid rule for the new-rule editor."""
     match_type = "match_subject_contains"

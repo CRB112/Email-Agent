@@ -1,7 +1,9 @@
 """Generic editors that preserve common JSON value types."""
 
 import tkinter as tk
-from tkinter import ttk
+import ttkbootstrap as ttk
+
+from app.rules.definitions import FIELD_CHOICES
 
 
 class FieldEditor(ttk.Frame):
@@ -24,7 +26,7 @@ class FieldEditor(ttk.Frame):
                 pady=3,
             )
 
-            editor = self._create_editor(value)
+            editor = self._create_editor(name, value)
             editor["widget"].grid(row=row, column=1, sticky="ew", pady=3)
             self._fields[name] = editor
 
@@ -36,10 +38,20 @@ class FieldEditor(ttk.Frame):
             for name, editor in self._fields.items()
         }
 
-    def _create_editor(self, value):
+    def _create_editor(self, name, value):
         if isinstance(value, dict):
             widget = FieldEditor(self, value)
             return {"kind": "dict", "widget": widget}
+
+        if name in FIELD_CHOICES:
+            variable = tk.StringVar(value=str(value))
+            widget = ttk.Combobox(
+                self,
+                textvariable=variable,
+                values=FIELD_CHOICES[name],
+                state="readonly",
+            )
+            return {"kind": "choice", "widget": widget, "variable": variable}
 
         if isinstance(value, bool):
             variable = tk.StringVar(value="Yes" if value else "No")
@@ -74,6 +86,8 @@ class FieldEditor(ttk.Frame):
         text = editor["variable"].get().strip()
         if kind == "bool":
             return text == "Yes"
+        if kind == "choice":
+            return text
         if kind == "list":
             return [item.strip() for item in text.split(",") if item.strip()]
 

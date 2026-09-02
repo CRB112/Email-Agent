@@ -1,23 +1,37 @@
 import asyncio
-import tkinter as tk
 from pathlib import Path
+
+import ttkbootstrap as ttk
+
 from app.microsoftGraph.email import authenticate
 from app.pages.pages import PAGES_LIST
+from app.parser.parser import loadUserOptions
 
 AUTH_RECORD_FILE = Path.home() / ".email-sifting-auth.json"
 
 
-class MainWindow(tk.Tk):
-    def __init__(self):
-        super().__init__()
+def get_saved_theme():
+    try:
+        dark_mode = loadUserOptions().get("dark_mode", False)
+    except Exception:
+        dark_mode = False
+    return "darkly" if dark_mode else "flatly"
 
-        self.title("Email Sifting Agent")
-        self.geometry("600x400")
+
+class MainWindow(ttk.Window):
+    def __init__(self):
+        super().__init__(
+            title="Email Sifting Agent",
+            theme=get_saved_theme(),
+            size=(900, 640),
+            minsize=(760, 520),
+        )
+
         self.graph_client = None
         self.async_loop = asyncio.new_event_loop()
         self.protocol("WM_DELETE_WINDOW", self.close)
 
-        container = tk.Frame(self)
+        container = ttk.Frame(self)
         container.pack(fill="both", expand=True)
 
         container.grid_rowconfigure(0, weight=1)

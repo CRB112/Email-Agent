@@ -2,14 +2,16 @@
 
 import re
 import tkinter as tk
-from tkinter import messagebox, ttk
+from tkinter import messagebox
+
+import ttkbootstrap as ttk
 
 from app.widgets.rule_editor import RuleEditor
 
 
 class RuleCard(ttk.Frame):
     def __init__(self, parent, rule, on_save=None, on_delete=None):
-        super().__init__(parent, relief="solid", borderwidth=1, padding=6)
+        super().__init__(parent, padding=8)
         self.expanded = False
         self.rule = rule
         self.on_save = on_save
@@ -18,7 +20,10 @@ class RuleCard(ttk.Frame):
         self.header_text = tk.StringVar()
 
         ttk.Button(
-            self, textvariable=self.header_text, command=self.toggle
+            self,
+            textvariable=self.header_text,
+            command=self.toggle,
+            bootstyle="secondary outline",
         ).pack(fill="x")
 
         self.details = ttk.Frame(self, padding=(10, 8, 10, 4))
@@ -62,12 +67,16 @@ class RuleCard(ttk.Frame):
                 actions,
                 text="Delete",
                 command=self.confirm_delete,
+                bootstyle="danger outline",
             ).pack(side="left", padx=(0, 6))
 
         if self.on_save is not None:
-            ttk.Button(actions, text="Edit", command=self.show_editor).pack(
-                side="left"
-            )
+            ttk.Button(
+                actions,
+                text="Edit",
+                command=self.show_editor,
+                bootstyle="primary outline",
+            ).pack(side="left")
 
     def show_editor(self):
         if self.editor is not None:

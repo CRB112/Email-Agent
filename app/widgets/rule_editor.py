@@ -2,7 +2,7 @@
 
 import copy
 import tkinter as tk
-from tkinter import ttk
+import ttkbootstrap as ttk
 
 from app.rules.definitions import (
     ACTION_DEFINITIONS,
@@ -89,15 +89,25 @@ class RuleEditor(ttk.Frame):
         self.action_fields.pack(fill="x")
         self._build_action_editor()
 
-        self.error = ttk.Label(self, text="", foreground="red")
+        self.error = ttk.Label(self, text="", bootstyle="danger")
         self.error.grid(row=5, column=0, columnspan=2, sticky="w", pady=(5, 0))
 
         buttons = ttk.Frame(self)
         buttons.grid(row=6, column=0, columnspan=2, sticky="e", pady=(8, 0))
-        ttk.Button(buttons, text="Cancel", command=on_cancel).pack(
+        ttk.Button(
+            buttons,
+            text="Cancel",
+            command=on_cancel,
+            bootstyle="secondary outline",
+        ).pack(
             side="left", padx=(0, 6)
         )
-        ttk.Button(buttons, text="Save", command=self.save).pack(side="left")
+        ttk.Button(
+            buttons,
+            text="Save",
+            command=self.save,
+            bootstyle="success",
+        ).pack(side="left")
 
         self.grid_columnconfigure(1, weight=1)
 

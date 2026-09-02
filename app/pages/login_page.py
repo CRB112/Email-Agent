@@ -1,23 +1,48 @@
 """Microsoft login page."""
 
-import tkinter as tk
-from tkinter import ttk
+import ttkbootstrap as ttk
 
 from app.microsoftGraph.email import authenticate
 
 
-class LoginPage(tk.Frame):
+class LoginPage(ttk.Frame):
     def __init__(self, parent, controller):
         super().__init__(parent)
         self.controller = controller
 
-        title = tk.Label(self, text="Please Log In", font=("Mouldy Cheese", 24))
-        title.pack(pady=(20, 30))
+        card = ttk.Frame(self, padding=40)
+        card.place(relx=0.5, rely=0.5, anchor="center")
 
-        ttk.Button(self, text="Log In", command=self.login).pack(pady=60)
+        ttk.Label(
+            card,
+            text="Email Sifting Agent",
+            font=("Mouldy Cheese", 30),
+            bootstyle="primary",
+        ).pack(pady=(0, 10))
 
-        self.status = tk.Label(self, text="")
-        self.status.pack()
+        ttk.Label(
+            card,
+            text="Connect your Microsoft account to organize your inbox.",
+            font=("TkDefaultFont", 11),
+            bootstyle="secondary",
+        ).pack(pady=(0, 28))
+
+        ttk.Button(
+            card,
+            text="Log in with Microsoft",
+            command=self.login,
+            bootstyle="primary",
+            padding=(24, 10),
+        ).pack(fill="x")
+
+        self.status = ttk.Label(
+            card,
+            text="",
+            wraplength=420,
+            justify="center",
+            bootstyle="secondary",
+        )
+        self.status.pack(pady=(18, 0))
 
     def on_show(self):
         self.status.config(text="")
