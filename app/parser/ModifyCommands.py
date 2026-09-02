@@ -38,11 +38,12 @@ class Mark(Modify):
     def __init__(self, settings : dict):
         super().__init__(settings)
         self.markType = settings["Mark_type"]
-        self.markOp = settings.get("Mark_op", None)
+        default_op = "Read" if self.markType == "Read" else "Normal"
+        self.markOp = settings.get("Mark_op", default_op)
     async def modify(self, email, g_client):
         request_body = Message()
         if self.markType == "Read":
-            request_body.is_read = True
+            request_body.is_read = self.markOp.lower() == "read"
         elif self.markType == "Importance":
             request_body.importance = Importance(self.markOp.lower())
 

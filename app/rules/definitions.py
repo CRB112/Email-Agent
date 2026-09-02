@@ -41,7 +41,7 @@ MATCH_TYPES_BY_LABEL = {
 ACTION_DEFINITIONS = {
     "Delete": {},
     "Move": {"Folder": ""},
-    "Mark": {"Mark_type": "Read"},
+    "Mark": {"Mark_type": "Read", "Mark_op": "Read"},
 }
 
 

@@ -21,7 +21,6 @@ TENANT_ID = "common"
 
 
 def logout():
-    """Remove this application's saved Microsoft authentication record."""
     AUTH_RECORD_FILE.unlink(missing_ok=True)
 
 
@@ -61,10 +60,15 @@ def authenticate():
     )
 
 
-async def getEmails(graph_client):
+async def getEmails(graph_client, received_after=None, max_emails=MAX_EMAILS):
+    received_filter = None
+    if received_after:
+        received_filter = f"receivedDateTime gt {received_after}"
+
     query = MessagesRequestBuilder.MessagesRequestBuilderGetQueryParameters(
-        top=MAX_EMAILS,
+        top=max_emails,
         orderby=["receivedDateTime desc"],
+        filter=received_filter,
     )
     request_configuration = (
         MessagesRequestBuilder.MessagesRequestBuilderGetRequestConfiguration(

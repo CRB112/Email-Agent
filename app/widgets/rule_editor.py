@@ -10,7 +10,7 @@ from app.rules.definitions import (
     MATCH_TYPES_BY_LABEL,
     match_type_label,
 )
-from app.widgets.field_editor import FieldEditor
+from app.widgets.field_editor import FieldEditor, MarkFieldEditor
 
 
 class RuleEditor(ttk.Frame):
@@ -113,13 +113,18 @@ class RuleEditor(ttk.Frame):
     def _build_action_editor(self):
         for child in self.action_fields.winfo_children():
             child.destroy()
-        if self.allow_action_type_changes:
-            action = self.action_type.get()
-            settings = self.rule.get("modify", {}).get(action, {})
-        else:
-            settings = self.rule.get("modify", {})
-        self.action_editor = FieldEditor(self.action_fields, settings)
+        action = self._action_name()
+        settings = self.rule.get("modify", {}).get(action, {})
+        editor_class = (
+            MarkFieldEditor if action == "Mark" else FieldEditor
+        )
+        self.action_editor = editor_class(self.action_fields, settings)
         self.action_editor.pack(fill="x")
+
+    def _action_name(self):
+        if self.allow_action_type_changes:
+            return self.action_type.get()
+        return next(iter(self.rule.get("modify", {})), "")
 
     def _change_match_type(self, _event):
         match_type = MATCH_TYPES_BY_LABEL[self.match_type_display.get()]
@@ -161,11 +166,8 @@ class RuleEditor(ttk.Frame):
         self.rule["priority"] = priority
         self.rule["type"] = self.match_type.get()
         self.rule["settings"] = conditions
-        if self.allow_action_type_changes:
-            action = self.action_type.get()
-            self.rule["modify"] = {action: action_values}
-        else:
-            self.rule["modify"] = action_values
+        action = self._action_name()
+        self.rule["modify"] = {action: action_values}
 
         try:
             self.on_save(self.rule)

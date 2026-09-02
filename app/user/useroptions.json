@@ -1,5 +1,8 @@
 {
   "setting": 1,
+  "max_emails": 100,
+  "sift_mode": "since_last",
+  "last_sift_at": null,
   "rules": [
     {
       "name": "Delete invoice emails",

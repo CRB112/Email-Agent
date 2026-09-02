@@ -89,3 +89,60 @@ class FieldEditor(ttk.Frame):
     @staticmethod
     def _label(name):
         return str(name).replace("_", " ").strip().title() + ":"
+
+
+class MarkFieldEditor(ttk.Frame):
+    """Editor for the related Mark_type and Mark_op action settings."""
+
+    OPERATIONS = {
+        "Read": ("Read", "Unread"),
+        "Importance": ("Low", "Normal", "High"),
+    }
+
+    def __init__(self, parent, values):
+        super().__init__(parent)
+
+        mark_type = values.get("Mark_type", "Read")
+        if mark_type not in self.OPERATIONS:
+            mark_type = "Read"
+        mark_op = values.get("Mark_op")
+        if mark_op not in self.OPERATIONS[mark_type]:
+            mark_op = self.OPERATIONS[mark_type][0]
+
+        self.mark_type = tk.StringVar(value=mark_type)
+        self.mark_op = tk.StringVar(value=mark_op)
+
+        ttk.Label(self, text="Mark Type:").grid(
+            row=0, column=0, sticky="nw", padx=(0, 10), pady=3
+        )
+        type_editor = ttk.Combobox(
+            self,
+            textvariable=self.mark_type,
+            values=tuple(self.OPERATIONS),
+            state="readonly",
+        )
+        type_editor.grid(row=0, column=1, sticky="ew", pady=3)
+        type_editor.bind("<<ComboboxSelected>>", self._change_mark_type)
+
+        ttk.Label(self, text="Mark Op:").grid(
+            row=1, column=0, sticky="nw", padx=(0, 10), pady=3
+        )
+        self.op_editor = ttk.Combobox(
+            self,
+            textvariable=self.mark_op,
+            values=self.OPERATIONS[mark_type],
+            state="readonly",
+        )
+        self.op_editor.grid(row=1, column=1, sticky="ew", pady=3)
+        self.grid_columnconfigure(1, weight=1)
+
+    def _change_mark_type(self, _event):
+        operations = self.OPERATIONS[self.mark_type.get()]
+        self.op_editor.configure(values=operations)
+        self.mark_op.set(operations[0])
+
+    def values(self):
+        return {
+            "Mark_type": self.mark_type.get(),
+            "Mark_op": self.mark_op.get(),
+        }

@@ -1,6 +1,7 @@
 """Main application page and its notebook tabs."""
 
 import tkinter as tk
+from datetime import datetime, timezone
 from tkinter import ttk
 
 from app.microsoftGraph.email import getEmails, logout as logout_user
@@ -19,6 +20,8 @@ class MainPage(tk.Frame):
         self.controller = controller
         self.emails = []
         self.emails_loaded = False
+        self.sift_mode = tk.StringVar(value="since_last")
+        self.max_emails = tk.StringVar(value="100")
 
         self.notebook = ttk.Notebook(self)
         self.notebook.pack(fill="both", expand=True)
@@ -54,13 +57,36 @@ class MainPage(tk.Frame):
             self.sift_tab,
             text="Home Page",
             font=("Mouldy Cheese", 24),
-        ).pack(pady=(70, 30))
+        ).pack(pady=(55, 20))
+
+        scope = ttk.LabelFrame(
+            self.sift_tab,
+            text="Emails to sift",
+            padding=(12, 8),
+        )
+        scope.pack()
+        ttk.Radiobutton(
+            scope,
+            text="Only emails received since the last successful sift",
+            variable=self.sift_mode,
+            value="since_last",
+        ).pack(anchor="w")
+        ttk.Radiobutton(
+            scope,
+            text="All available emails again",
+            variable=self.sift_mode,
+            value="all",
+        ).pack(anchor="w")
+
+        self.last_sift_label = ttk.Label(self.sift_tab, text="")
+        self.last_sift_label.pack(pady=(8, 0))
+        self._refresh_sift_options()
 
         ttk.Button(
             self.sift_tab,
             text="Go",
             command=self.attempt_go,
-        ).pack(pady=60)
+        ).pack(pady=30)
 
         self.status = tk.Label(
             self.sift_tab,
@@ -78,13 +104,33 @@ class MainPage(tk.Frame):
             heading,
             text="Rules",
             font=("Mouldy Cheese", 24),
-        ).pack(side="left")
+        ).grid(row=0, column=0, sticky="w")
+
+        email_limit = ttk.Frame(heading)
+        email_limit.grid(row=0, column=1, sticky="e")
+        ttk.Label(email_limit, text="MAX emails per sift:").grid(
+            row=1, column=0, sticky="e"
+        )
+        ttk.Entry(
+            email_limit,
+            textvariable=self.max_emails,
+            width=8,
+        ).grid(row=1, column=1, padx=(8, 6))
+        self.max_emails_status = ttk.Label(email_limit, text="")
+        self.max_emails_status.grid(row=0, column=2, sticky="s")
+        ttk.Button(
+            email_limit,
+            text="Save",
+            command=self.save_max_emails,
+        ).grid(row=1, column=2)
 
         ttk.Button(
             heading,
             text="Add rule",
             command=self.show_new_rule_editor,
-        ).pack(side="right")
+        ).grid(row=1, column=1, sticky="e", pady=(10, 0))
+
+        heading.grid_columnconfigure(1, weight=1)
 
         rules_box = ttk.LabelFrame(
             self.rules_tab,
@@ -119,6 +165,7 @@ class MainPage(tk.Frame):
         try:
             options = loadUserOptions()
             rules = options.get("rules", [])
+            self.max_emails.set(str(options.get("max_emails", 100)))
         except Exception as error:
             ttk.Label(
                 self.rules_list.content,
@@ -151,6 +198,24 @@ class MainPage(tk.Frame):
                 padx=4,
                 pady=4,
             )
+
+    def save_max_emails(self):
+        try:
+            max_emails = int(self.max_emails.get())
+            if max_emails < 1:
+                raise ValueError
+        except ValueError:
+            self.max_emails_status.config(
+                text="Enter a positive whole number.",
+                foreground="red",
+            )
+            return
+
+        options = loadUserOptions()
+        options["max_emails"] = max_emails
+        saveUserOptions(options)
+        self.max_emails.set(str(max_emails))
+        self.max_emails_status.config(text="Saved", foreground="green")
 
     def show_new_rule_editor(self):
         self.rules_list.clear()
@@ -200,6 +265,7 @@ class MainPage(tk.Frame):
         self.refresh_rules()
 
     def on_show(self):
+        self._refresh_sift_options()
         if self.emails_loaded:
             return
 
@@ -215,9 +281,32 @@ class MainPage(tk.Frame):
         self.emails_loaded = True
         self.status.config(text=f"Loaded {len(self.emails)} emails")
 
-    def load_emails(self):
+    def _refresh_sift_options(self):
+        try:
+            options = loadUserOptions()
+        except Exception:
+            return
+
+        saved_mode = options.get("sift_mode", "since_last")
+        if saved_mode in {"since_last", "all"}:
+            self.sift_mode.set(saved_mode)
+
+        last_sift_at = options.get("last_sift_at")
+        if last_sift_at:
+            display_time = last_sift_at.replace("T", " ").removesuffix("Z")
+            self.last_sift_label.config(text=f"Last successful sift: {display_time} UTC")
+        else:
+            self.last_sift_label.config(text="No previous successful sift recorded")
+
+    def load_emails(self, received_after=None):
+        options = loadUserOptions()
+        max_emails = options.get("max_emails", 100)
         self.emails = self.controller.run_async(
-            getEmails(self.controller.graph_client)
+            getEmails(
+                self.controller.graph_client,
+                received_after,
+                max_emails,
+            )
         )
 
     def attempt_go(self):
@@ -225,15 +314,29 @@ class MainPage(tk.Frame):
         self.update_idletasks()
 
         try:
+            options = loadUserOptions()
+            mode = self.sift_mode.get()
+            received_after = (
+                options.get("last_sift_at") if mode == "since_last" else None
+            )
+            checkpoint = (
+                datetime.now(timezone.utc)
+                .isoformat(timespec="seconds")
+                .replace("+00:00", "Z")
+            )
             # A previous sift may have deleted or moved messages. Always use
             # fresh Graph message objects and IDs for the next run.
-            self.load_emails()
+            self.load_emails(received_after)
             self.status.config(text="Sifting through emails...")
             self.update_idletasks()
 
             num_emails, num_modifications = self.controller.run_async(
                 parseEmailsWithJson(self.emails, self.controller.graph_client)
             )
+
+            options["sift_mode"] = mode
+            options["last_sift_at"] = checkpoint
+            saveUserOptions(options)
         except Exception as error:
             self.status.config(text=f"Failed to sift emails: {error}")
             return
@@ -243,6 +346,7 @@ class MainPage(tk.Frame):
             f"Processed {num_emails} emails and made "
             f"{num_modifications} modifications."
         )
+        self._refresh_sift_options()
 
     def logout(self):
         logout_user()
