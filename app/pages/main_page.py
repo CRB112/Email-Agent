@@ -385,8 +385,6 @@ class MainPage(ttk.Frame):
                 .isoformat(timespec="seconds")
                 .replace("+00:00", "Z")
             )
-            # A previous sift may have deleted or moved messages. Always use
-            # fresh Graph message objects and IDs for the next run.
             self.load_emails(received_after)
             self.status.config(text="Sifting through emails...")
             self.update_idletasks()

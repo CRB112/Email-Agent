@@ -81,6 +81,19 @@ class Match_sender_contains(Match_contains):
         return email.from_.email_address.address or ""
 
 
+class Match_domain_contains(Match_contains):
+    def get_search_text(self, email) -> str:
+        if not email.from_ or not email.from_.email_address:
+            return ""
+
+        address = email.from_.email_address.address or ""
+        try:
+            _, domain = address.rsplit("@", 1)
+        except ValueError:
+            return ""
+        return domain.strip()
+
+
 
 COMMAND_CLASSES = {
     "match_subject" : Match_subject,
@@ -90,5 +103,6 @@ COMMAND_CLASSES = {
     "match_body" : Match_body_contains,
     "match_body_contains" : Match_body_contains,
     "match_subject_contains" : Match_subject_contains,
-    "match_sender_contains" : Match_sender_contains
+    "match_sender_contains" : Match_sender_contains,
+    "match_domain_contains" : Match_domain_contains,
 }

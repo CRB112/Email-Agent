@@ -22,6 +22,11 @@ MATCH_DEFINITIONS = {
         "Type": "Any",
         "CaseSensitive": False,
     },
+    "match_domain_contains": {
+        "Words": [],
+        "Type": "Any",
+        "CaseSensitive": False,
+    },
 }
 
 
