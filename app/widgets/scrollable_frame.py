@@ -25,8 +25,13 @@ class ScrollableFrame(ttk.Frame):
 
         self.content.bind("<Configure>", self._update_scroll_region)
         self.canvas.bind("<Configure>", self._resize_content)
-        self.canvas.bind("<Button-4>", self._scroll_up)
-        self.canvas.bind("<Button-5>", self._scroll_down)
+
+        # Wheel events belong to whichever child widget is under the pointer,
+        # not necessarily to the Canvas. Listen application-wide and handle
+        # only events originating inside this scrollable frame.
+        self.bind_all("<MouseWheel>", self._on_mousewheel, add="+")
+        self.bind_all("<Button-4>", self._on_mousewheel, add="+")
+        self.bind_all("<Button-5>", self._on_mousewheel, add="+")
 
         self.canvas.pack(side="left", fill="both", expand=True)
         scrollbar.pack(side="right", fill="y")
@@ -45,8 +50,26 @@ class ScrollableFrame(ttk.Frame):
     def _resize_content(self, event):
         self.canvas.itemconfigure(self._canvas_window, width=event.width)
 
-    def _scroll_up(self, _event):
-        self.canvas.yview_scroll(-1, "units")
+    def _on_mousewheel(self, event):
+        if not self._event_is_inside(event.widget):
+            return None
 
-    def _scroll_down(self, _event):
-        self.canvas.yview_scroll(1, "units")
+        if getattr(event, "num", None) == 4:
+            direction = -1
+        elif getattr(event, "num", None) == 5:
+            direction = 1
+        else:
+            delta = getattr(event, "delta", 0)
+            if not delta:
+                return None
+            direction = -1 if delta > 0 else 1
+
+        self.canvas.yview_scroll(direction, "units")
+        return "break"
+
+    def _event_is_inside(self, widget):
+        while widget is not None:
+            if widget is self:
+                return True
+            widget = getattr(widget, "master", None)
+        return False

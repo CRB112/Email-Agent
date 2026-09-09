@@ -9,6 +9,16 @@ class Match(ABC):
         raise NotImplementedError
 
 
+class Match_default(Match):
+    """Fallback matcher, applied by the parser after normal rules fail."""
+
+    def __init__(self, settings: dict):
+        pass
+
+    def testMatch(self, email) -> bool:
+        return True
+
+
 
 class Match_subject(Match):
     def __init__(self, settings: dict):
@@ -91,15 +101,16 @@ class Match_domain_contains(Match_contains):
             _, domain = address.rsplit("@", 1)
         except ValueError:
             return ""
+
         return domain.strip()
 
 
 
 COMMAND_CLASSES = {
+    "match_default" : Match_default,
     "match_subject" : Match_subject,
     "match_sender" : Match_sender,
     "match_domain" : Match_domain,
-    # Keep the old name so previously saved rules continue to work.
     "match_body" : Match_body_contains,
     "match_body_contains" : Match_body_contains,
     "match_subject_contains" : Match_subject_contains,

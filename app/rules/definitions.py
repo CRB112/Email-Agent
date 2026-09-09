@@ -4,6 +4,7 @@ import copy
 
 
 MATCH_DEFINITIONS = {
+    "match_default": {},
     "match_subject": {"Sub": ""},
     "match_sender": {"Sender": ""},
     "match_domain": {"Domain": ""},
@@ -31,7 +32,6 @@ MATCH_DEFINITIONS = {
 
 
 def match_type_label(match_type):
-    """Convert an internal matcher name into a user-facing label."""
     if match_type == "match_body":
         match_type = "match_body_contains"
     return match_type.removeprefix("match_").replace("_", " ").title()

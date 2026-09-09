@@ -2,7 +2,7 @@ import json
 import shutil
 import sys
 from pathlib import Path
-from app.parser.MatchCommands import COMMAND_CLASSES
+from app.parser.MatchCommands import COMMAND_CLASSES, Match_default
 from app.parser.ModifyCommands import MODIFY_CLASSES, Delete
 
 APP_NAME = "EmailSiftingAgent"
@@ -67,22 +67,50 @@ def parseUserOptions():
 
 async def parseEmailsWithJson(emails, graph_client):
     rules = parseUserOptions()
+    normal_rules = [
+        rule_data for rule_data in rules
+        if not isinstance(rule_data[0], Match_default)
+    ]
+    default_rules = [
+        rule_data for rule_data in rules
+        if isinstance(rule_data[0], Match_default)
+    ]
     num_emails = 0
     num_modifications = 0
 
     for email in emails:
         deleted = False
-        for rule, modify in rules:
+        matched_normal_rule = False
+        email_was_modified = False
+
+        for rule, modify in normal_rules:
             if rule.testMatch(email):
-                num_emails += 1
+                matched_normal_rule = True
                 for m in modify:
                     await m.modify(email, graph_client)
                     num_modifications += 1
+                    email_was_modified = True
                     if isinstance(m, Delete):
                         deleted = True
                         break
 
             if deleted:
                 break
+
+        if not matched_normal_rule and not deleted:
+            for _, modify in default_rules:
+                for m in modify:
+                    await m.modify(email, graph_client)
+                    num_modifications += 1
+                    email_was_modified = True
+                    if isinstance(m, Delete):
+                        deleted = True
+                        break
+
+                if deleted:
+                    break
+
+        if email_was_modified:
+            num_emails += 1
 
     return num_emails, num_modifications
