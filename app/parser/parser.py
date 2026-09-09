@@ -35,7 +35,6 @@ def loadUserOptions() -> dict:
 
 
 def saveUserOptions(options: dict) -> None:
-    """Safely replace the persistent user options file."""
     ensureUserOptions()
     temporary_file = OPTIONS_FILE.with_suffix(".tmp")
 
@@ -57,9 +56,16 @@ def parseUserOptions():
         rule_class = COMMAND_CLASSES[rule["type"]]
         rule_object = rule_class(rule.get("settings", {}))
 
+        # Mark the current message before Move can relocate it, and perform
+        # destructive deletion only after every other action.
+        action_order = {"Mark": 0, "Move": 1, "Delete": 2}
+        modify_items = sorted(
+            rule.get("modify", {}).items(),
+            key=lambda item: action_order.get(item[0], 0),
+        )
         modify_list = [
             MODIFY_CLASSES[modify_type](settings)
-            for modify_type, settings in rule.get("modify", {}).items()
+            for modify_type, settings in modify_items
         ]
         rulesObj.append((rule_object, modify_list))
 

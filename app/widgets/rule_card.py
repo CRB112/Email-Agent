@@ -88,6 +88,7 @@ class RuleCard(ttk.Frame):
             on_save=self.on_save,
             on_cancel=self.hide_editor,
             allow_match_type_changes=True,
+            allow_action_type_changes=True,
         )
         self.editor.pack(fill="x")
 
