@@ -1,14 +1,15 @@
 """Main application page and its notebook tabs."""
 
 import tkinter as tk
-from datetime import datetime, timezone
+from threading import Event
 
 import ttkbootstrap as ttk
 
-from app.microsoftGraph.email import getEmails, logout as logout_user
+from app.microsoftGraph.email import logout as logout_user
+from app.services.sifting import sift
+from app.services.control import SiftCancelled
 from app.parser.parser import (
     loadUserOptions,
-    parseEmailsWithJson,
     saveUserOptions,
 )
 from app.rules.definitions import create_rule_template
@@ -19,8 +20,8 @@ class MainPage(ttk.Frame):
     def __init__(self, parent, controller):
         super().__init__(parent)
         self.controller = controller
-        self.emails = []
-        self.emails_loaded = False
+        self.sifting = False
+        self.cancel_event = Event()
         self.sift_mode = tk.StringVar(value="since_last")
         self.max_emails = tk.StringVar(value="100")
         self.dark_mode = tk.BooleanVar(value=self._saved_dark_mode())
@@ -45,14 +46,14 @@ class MainPage(ttk.Frame):
         self.notebook.bind("<<NotebookTabChanged>>", self._on_tab_changed)
 
     def _build_logout_button(self):
-        logout_button = ttk.Button(
+        self.logout_button = ttk.Button(
             self,
             text="Log out",
             command=self.logout,
             bootstyle="danger outline",
             padding=(10, 2),
         )
-        logout_button.place(relx=1.0, x=-26, y=19, anchor="ne")
+        self.logout_button.place(relx=1.0, x=-26, y=19, anchor="ne")
 
     def _build_sift_tab(self):
         ttk.Label(
@@ -91,13 +92,21 @@ class MainPage(ttk.Frame):
         self.last_sift_label.pack(pady=(8, 0))
         self._refresh_sift_options()
 
-        ttk.Button(
+        self.go_button = ttk.Button(
             self.sift_tab,
             text="Go",
             command=self.attempt_go,
             bootstyle="success",
             padding=(34, 10),
-        ).pack(pady=30)
+        )
+        self.go_button.pack(pady=(20, 8))
+        self.cancel_button = ttk.Button(
+            self.sift_tab, text="Cancel", command=self.cancel_sift,
+            state="disabled", bootstyle="secondary outline",
+        )
+        self.cancel_button.pack(pady=(0, 8))
+        self.progress = ttk.Progressbar(self.sift_tab, length=360)
+        self.progress.pack(pady=(0, 8))
 
         self.status = ttk.Label(
             self.sift_tab,
@@ -327,20 +336,7 @@ class MainPage(ttk.Frame):
 
     def on_show(self):
         self._refresh_sift_options()
-        if self.emails_loaded:
-            return
-
-        self.status.config(text="Loading emails...")
-        self.update_idletasks()
-
-        try:
-            self.load_emails()
-        except Exception as error:
-            self.status.config(text=f"Failed to load emails: {error}")
-            return
-
-        self.emails_loaded = True
-        self.status.config(text=f"Loaded {len(self.emails)} emails")
+        self.status.config(text="Ready to sift.")
 
     def _refresh_sift_options(self):
         try:
@@ -355,62 +351,80 @@ class MainPage(ttk.Frame):
         last_sift_at = options.get("last_sift_at")
         if last_sift_at:
             display_time = last_sift_at.replace("T", " ").removesuffix("Z")
-            self.last_sift_label.config(text=f"Last successful sift: {display_time} UTC")
+            self.last_sift_label.config(text=f"Sift checkpoint: {display_time} UTC")
         else:
             self.last_sift_label.config(text="No previous successful sift recorded")
 
-    def load_emails(self, received_after=None):
-        options = loadUserOptions()
-        max_emails = options.get("max_emails", 100)
-        self.emails = self.controller.run_async(
-            getEmails(
-                self.controller.graph_client,
-                received_after,
-                max_emails,
-            )
-        )
+    def _set_busy(self, busy):
+        self.sifting = busy
+        self.go_button.config(state="disabled" if busy else "normal")
+        self.logout_button.config(state="disabled" if busy else "normal")
+        self.cancel_button.config(state="normal" if busy else "disabled")
+        if not busy:
+            self.progress.stop()
 
     def attempt_go(self):
-        self.status.config(text="Refreshing inbox...")
-        self.update_idletasks()
-
+        if self.sifting or self.controller.closing:
+            return
         try:
             options = loadUserOptions()
-            mode = self.sift_mode.get()
-            received_after = (
-                options.get("last_sift_at") if mode == "since_last" else None
-            )
-            checkpoint = (
-                datetime.now(timezone.utc)
-                .isoformat(timespec="seconds")
-                .replace("+00:00", "Z")
-            )
-            self.load_emails(received_after)
-            self.status.config(text="Sifting through emails...")
-            self.update_idletasks()
+        except Exception as error:
+            self.status.config(text=f"Could not load rules: {error}")
+            return
+        mode = self.sift_mode.get()
+        client = self.controller.graph_client
+        self.cancel_event = Event()
+        cancel = self.cancel_event
+        self._set_busy(True)
+        self.progress.config(mode="indeterminate", maximum=100, value=0)
+        self.progress.start()
+        self.status.config(text="Refreshing inbox...")
+        self.controller.worker.submit(
+            lambda report: sift(client, options, mode, cancel, report),
+            self._sift_finished, self._sift_failed, self._sift_progress,
+        )
 
-            num_emails, num_modifications = self.controller.run_async(
-                parseEmailsWithJson(self.emails, self.controller.graph_client)
-            )
+    def cancel_sift(self):
+        if self.sifting:
+            self.cancel_event.set()
+            self.cancel_button.config(state="disabled")
+            self.status.config(text="Stopping after the current message/request finishes...")
 
-            options["sift_mode"] = mode
-            options["last_sift_at"] = checkpoint
+    def _sift_progress(self, text, done, total):
+        if total:
+            self.progress.stop()
+            self.progress.config(mode="determinate", maximum=total, value=done)
+        if not self.cancel_event.is_set():
+            self.status.config(text=f"{text} {done}/{total}" if total else text)
+
+    def _sift_finished(self, result):
+        self._set_busy(False)
+        # Explicitly finish even when the inbox was empty and no per-message
+        # progress events were emitted. Set this after stopping animation.
+        self.progress.config(mode="determinate", maximum=100, value=100)
+        try:
+            # Merge into current settings so edits made during a run survive.
+            options = loadUserOptions()
+            options.update(result.settings_update)
             saveUserOptions(options)
         except Exception as error:
-            self.status.config(text=f"Failed to sift emails: {error}")
+            self.status.config(text=f"Emails processed, but checkpoint could not be saved: {error}")
             return
-
-        self.status.config(
-            text="Successfully sifted emails! "
-            f"Processed {num_emails} emails and made "
-            f"{num_modifications} modifications."
-        )
+        self.status.config(text=(
+            f"Examined {result.examined} emails; modified {result.modified} emails "
+            f"with {result.modifications} actions."
+        ))
         self._refresh_sift_options()
 
+    def _sift_failed(self, error):
+        self._set_busy(False)
+        detail = "Sift cancelled." if isinstance(error, SiftCancelled) else f"Sift failed: {error}."
+        self.status.config(text=f"{detail} Completed changes remain; checkpoint was not advanced.")
+
     def logout(self):
+        if self.sifting or self.controller.closing:
+            return
         logout_user()
         self.controller.graph_client = None
-        self.emails = []
-        self.emails_loaded = False
         self.status.config(text="")
         self.controller.show_page("Login")

@@ -1,9 +1,8 @@
-import asyncio
 from pathlib import Path
 
 import ttkbootstrap as ttk
 
-from app.microsoftGraph.email import authenticate
+from app.services.worker import BackgroundWorker
 from app.pages.pages import PAGES_LIST
 from app.parser.parser import loadUserOptions
 
@@ -28,7 +27,8 @@ class MainWindow(ttk.Window):
         )
 
         self.graph_client = None
-        self.async_loop = asyncio.new_event_loop()
+        self.worker = BackgroundWorker()
+        self.closing = False
         self.protocol("WM_DELETE_WINDOW", self.close)
 
         container = ttk.Frame(self)
@@ -49,11 +49,23 @@ class MainWindow(ttk.Window):
                 sticky="nsew",
             )
 
+        self.show_page("Login")
+        self.after(50, self._poll_worker)
         if AUTH_RECORD_FILE.exists():
-            self.graph_client = authenticate()
-            self.show_page("Main")
+            self.after(0, self.pages["Login"].login)
+
+    def _poll_worker(self):
+        if self.closing:
+            if not self.worker.thread.is_alive():
+                self.destroy()
+                return
         else:
-            self.show_page("Login")
+            try:
+                self.worker.drain()
+            finally:
+                self.after(50, self._poll_worker)
+            return
+        self.after(50, self._poll_worker)
 
     def show_page(self, page_name):
         page = self.pages[page_name]
@@ -63,14 +75,15 @@ class MainWindow(ttk.Window):
 
         page.tkraise()
 
-    def run_async(self, operation):
-        """Run Graph operations on the application's persistent event loop."""
-        return self.async_loop.run_until_complete(operation)
-
     def close(self):
-        if not self.async_loop.is_closed():
-            self.async_loop.close()
-        self.destroy()
+        if self.closing:
+            return
+        self.closing = True
+        self.pages["Main"].cancel_sift()
+        self.title("Closing — waiting for the current operation to finish...")
+        self.worker.close()
+        # Keep pumping Tk while the current message/login finishes safely.
+
 
 
 if __name__ == "__main__":

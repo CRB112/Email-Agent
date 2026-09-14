@@ -1,0 +1,26 @@
+[
+  {
+    "id": "invoice-1",
+    "subject": "Invoice for September",
+    "sender": "billing@example.com",
+    "body": "Your subscription invoice is attached."
+  },
+  {
+    "id": "payment-1",
+    "subject": "PAYMENT DUE tomorrow",
+    "sender": "accounts@shop.example",
+    "body": "Please review your outstanding balance."
+  },
+  {
+    "id": "personal-1",
+    "subject": "Lunch on Friday?",
+    "sender": "friend@example.net",
+    "body": "Would noon work for you?"
+  },
+  {
+    "id": "newsletter-1",
+    "subject": "Weekly updates",
+    "sender": "news@newsletter.example",
+    "body": "This week's news and offers."
+  }
+]

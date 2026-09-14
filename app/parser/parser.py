@@ -4,6 +4,7 @@ import sys
 from pathlib import Path
 from app.parser.MatchCommands import COMMAND_CLASSES, Match_default
 from app.parser.ModifyCommands import MODIFY_CLASSES, Delete
+from app.services.control import check_cancelled
 
 APP_NAME = "EmailSiftingAgent"
 USER_OPTIONS_DIR = Path.home() / ".config" / APP_NAME
@@ -44,8 +45,9 @@ def saveUserOptions(options: dict) -> None:
 
     temporary_file.replace(OPTIONS_FILE)
 
-def parseUserOptions():
-    options = loadUserOptions()
+def parseUserOptions(options=None):
+    if options is None:
+        options = loadUserOptions()
     rules = sorted(
         options.get("rules", []),
         key=lambda rule: rule.get("priority", 100)
@@ -71,8 +73,8 @@ def parseUserOptions():
 
     return rulesObj
 
-async def parseEmailsWithJson(emails, graph_client):
-    rules = parseUserOptions()
+async def parseEmailsWithJson(emails, graph_client, *, options=None, cancel=None, progress=None):
+    rules = parseUserOptions(options)
     normal_rules = [
         rule_data for rule_data in rules
         if not isinstance(rule_data[0], Match_default)
@@ -84,7 +86,8 @@ async def parseEmailsWithJson(emails, graph_client):
     num_emails = 0
     num_modifications = 0
 
-    for email in emails:
+    for index, email in enumerate(emails):
+        check_cancelled(cancel)
         deleted = False
         matched_normal_rule = False
         email_was_modified = False
@@ -118,5 +121,7 @@ async def parseEmailsWithJson(emails, graph_client):
 
         if email_was_modified:
             num_emails += 1
+        if progress is not None:
+            progress(index + 1, len(emails))
 
     return num_emails, num_modifications

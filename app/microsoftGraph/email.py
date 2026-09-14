@@ -1,4 +1,5 @@
 from pathlib import Path
+from app.services.control import check_cancelled
 
 from azure.identity import (
     AuthenticationRecord,
@@ -60,15 +61,21 @@ def authenticate():
     )
 
 
-async def getEmails(graph_client, received_after=None, max_emails=MAX_EMAILS):
-    received_filter = None
+async def getEmails(
+    graph_client, received_after=None, max_emails=MAX_EMAILS, *,
+    oldest_first=False, received_before=None, checkpoint_ids=(), cancel=None,
+):
+    filters = []
     if received_after:
-        received_filter = f"receivedDateTime gt {received_after}"
+        operator = "ge" if oldest_first else "gt"
+        filters.append(f"receivedDateTime {operator} {received_after}")
+    if received_before:
+        filters.append(f"receivedDateTime le {received_before}")
 
     query = MessagesRequestBuilder.MessagesRequestBuilderGetQueryParameters(
         top=max_emails,
-        orderby=["receivedDateTime desc"],
-        filter=received_filter,
+        orderby=["receivedDateTime asc" if oldest_first else "receivedDateTime desc"],
+        filter=" and ".join(filters) or None,
     )
     request_configuration = (
         MessagesRequestBuilder.MessagesRequestBuilderGetRequestConfiguration(
@@ -80,7 +87,36 @@ async def getEmails(graph_client, received_after=None, max_emails=MAX_EMAILS):
         'outlook.body-content-type="text"',
     )
 
-    messages = await graph_client.me.mail_folders.by_mail_folder_id(
+    builder = graph_client.me.mail_folders.by_mail_folder_id(
         "inbox"
-    ).messages.get(request_configuration=request_configuration)
-    return messages.value or []
+    ).messages
+    emails = []
+    seen_ids = set(checkpoint_ids)
+    while True:
+        check_cancelled(cancel)
+        messages = await builder.get(request_configuration=request_configuration)
+        check_cancelled(cancel)
+        for email in messages.value or []:
+            if email.id in seen_ids:
+                continue
+            emails.append(email)
+            seen_ids.add(email.id)
+            if len(emails) >= max_emails:
+                return emails
+        if not messages.odata_next_link:
+            return emails
+        builder = builder.with_url(messages.odata_next_link)
+
+
+def next_checkpoint(emails, previous_at, previous_ids, run_started_at):
+    """Advance only through fetched messages, retaining ties at the boundary."""
+    if not emails:
+        return run_started_at, []
+
+    boundary = emails[-1].received_date_time.isoformat().replace("+00:00", "Z")
+    ids = set(previous_ids) if boundary == previous_at else set()
+    ids.update(
+        email.id for email in emails
+        if email.received_date_time == emails[-1].received_date_time
+    )
+    return boundary, sorted(ids)
