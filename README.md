@@ -1,10 +1,32 @@
 # Email Sifting Agent
 
-A desktop app for organizing a Microsoft inbox using configurable rules.
+A desktop app for organizing Microsoft and personal Gmail inboxes using configurable rules.
+
+## Providers
+
+Choose Microsoft or Gmail on the login screen. Both implement the abstract
+`EmailAgent` contract; see [ARCHITECTURE.md](ARCHITECTURE.md).
+
+For Gmail, enable the Gmail API in a Google Cloud project and create a Desktop
+OAuth client following the [Google Python quickstart](https://developers.google.com/workspace/gmail/api/quickstart/python).
+Configure an External audience for personal Gmail and add your account as a test
+user while the OAuth app is in testing. Download the client JSON to
+`~/.config/EmailSiftingAgent/gmail-client.json`, or set `GMAIL_CLIENT_SECRET_FILE`
+to its path. Install `requirements.txt`, then choose Log in with Gmail.
+The app requests `gmail.modify`; Gmail tokens stay in memory for the session.
+
+Gmail Delete moves to Trash. Move accepts an existing user label name/ID, or
+`archive` to remove INBOX without adding a label. Other labels remain attached.
+High importance sets IMPORTANT; Normal and Low both clear it because Gmail
+has no separate low-importance state. Read/Unread controls UNREAD.
+Rules are shared across providers, so review folder destinations when switching.
+The incremental checkpoint is associated with the authenticated account. Signing
+back into that account preserves progress; changing accounts resets it. The first
+login after upgrading also resets the legacy unscoped checkpoint.
 
 ## Running a sift
 
-Login and Microsoft Graph operations run on a background worker so the window
+Login and mailbox operations run on a background worker so the window
 stays responsive. Click Go to fetch emails and watch the progress counter.
 Cancel stops after the current request/message finishes; actions already applied
 remain, and an interrupted run does not advance the checkpoint. A retry can
@@ -28,8 +50,8 @@ This runs the full test suite followed by the fake-inbox simulation, stopping if
 either fails. It uses `.venv/bin/python` when available, otherwise `python3`.
 You can pass simulator options, such as `bash run_tests.sh --emails path/to/inbox.json`.
 
-The suite uses Python's built-in `unittest`, fake emails, and a recording Graph
-substitute. It needs no Microsoft login, network connection, or running GUI.
+The suite uses Python's built-in `unittest`, fake emails, a recording Graph
+substitute, and mocked Gmail requests. It needs no login, network, or running GUI.
 Settings tests use temporary directories; your saved rules and checkpoint are
 not changed.
 
@@ -38,7 +60,7 @@ priority, multiple matching rules, fallback rules, deletion ordering, failures,
 settings persistence, pagination, timestamp ties, and checkpoint preservation.
 It also checks background thread/callback separation, login submission,
 progress reporting, cancellation boundaries, and settings edits during a run.
-These tests do not validate actual Graph server behavior, browser authentication,
+These tests do not validate actual provider server behavior, browser authentication,
 or visual widget interactions.
 
 For a fresh environment, install the app dependencies first:

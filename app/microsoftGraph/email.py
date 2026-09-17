@@ -1,5 +1,6 @@
 from pathlib import Path
 from app.services.control import check_cancelled
+from app.agents.base import next_checkpoint
 
 from azure.identity import (
     AuthenticationRecord,
@@ -106,17 +107,3 @@ async def getEmails(
         if not messages.odata_next_link:
             return emails
         builder = builder.with_url(messages.odata_next_link)
-
-
-def next_checkpoint(emails, previous_at, previous_ids, run_started_at):
-    """Advance only through fetched messages, retaining ties at the boundary."""
-    if not emails:
-        return run_started_at, []
-
-    boundary = emails[-1].received_date_time.isoformat().replace("+00:00", "Z")
-    ids = set(previous_ids) if boundary == previous_at else set()
-    ids.update(
-        email.id for email in emails
-        if email.received_date_time == emails[-1].received_date_time
-    )
-    return boundary, sorted(ids)

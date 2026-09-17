@@ -5,7 +5,6 @@ from threading import Event
 
 import ttkbootstrap as ttk
 
-from app.microsoftGraph.email import logout as logout_user
 from app.services.sifting import sift
 from app.services.control import SiftCancelled
 from app.parser.parser import (
@@ -372,7 +371,7 @@ class MainPage(ttk.Frame):
             self.status.config(text=f"Could not load rules: {error}")
             return
         mode = self.sift_mode.get()
-        client = self.controller.graph_client
+        client = self.controller.email_agent
         self.cancel_event = Event()
         cancel = self.cancel_event
         self._set_busy(True)
@@ -424,7 +423,7 @@ class MainPage(ttk.Frame):
     def logout(self):
         if self.sifting or self.controller.closing:
             return
-        logout_user()
-        self.controller.graph_client = None
+        self.controller.email_agent.logout()
+        self.controller.email_agent = None
         self.status.config(text="")
         self.controller.show_page("Login")

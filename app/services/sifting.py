@@ -1,7 +1,8 @@
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
-from app.microsoftGraph.email import getEmails, next_checkpoint
+from app.agents import getEmails
+from app.agents.base import next_checkpoint
 from app.parser.parser import parseEmailsWithJson
 from app.services.control import check_cancelled
 

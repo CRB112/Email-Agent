@@ -26,7 +26,7 @@ class MainWindow(ttk.Window):
             minsize=(760, 520),
         )
 
-        self.graph_client = None
+        self.email_agent = None
         self.worker = BackgroundWorker()
         self.closing = False
         self.protocol("WM_DELETE_WINDOW", self.close)
@@ -51,7 +51,7 @@ class MainWindow(ttk.Window):
 
         self.show_page("Login")
         self.after(50, self._poll_worker)
-        if AUTH_RECORD_FILE.exists():
+        if AUTH_RECORD_FILE.exists() and loadUserOptions().get("provider", "microsoft") == "microsoft":
             self.after(0, self.pages["Login"].login)
 
     def _poll_worker(self):

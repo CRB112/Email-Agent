@@ -3,3 +3,5 @@ pyinstaller>=6,<7
 ttkbootstrap>=2.2,<3
 azure-identity>=1.25,<2
 msgraph-sdk>=1.61,<2
+google-api-python-client>=2,<3
+google-auth-oauthlib>=1,<2
