@@ -1,5 +1,6 @@
 """Personal Gmail adapter using Google's installed-application OAuth flow."""
 import base64
+import json
 import os
 from datetime import datetime, timezone
 from email import policy
@@ -18,16 +19,50 @@ class GmailAgent(EmailAgent):
     def __init__(self, client):
         self.client = client
 
+    @staticmethod
+    def _client_config(credentials_file=None):
+        path = Path(credentials_file or os.environ.get(
+            "GMAIL_CLIENT_SECRET_FILE", "~/.config/EmailSiftingAgent/gmail-client.json"
+        )).expanduser()
+        try:
+            with path.open(encoding="utf-8") as source:
+                config = json.load(source)
+        except OSError as error:
+            raise ValueError(
+                f"Cannot read Gmail client JSON at {path}. "
+                "Use 'Choose Gmail client JSON...' to select the Desktop app "
+                "OAuth client downloaded from Google Cloud."
+            ) from error
+        except (ValueError, UnicodeError) as error:
+            raise ValueError(
+                "Invalid Gmail client JSON. Download the Desktop app OAuth "
+                "client JSON from Google Cloud and select it again."
+            ) from error
+        installed = config.get("installed") if isinstance(config, dict) else None
+        if not isinstance(installed, dict) or "web" in config:
+            raise ValueError(
+                "Gmail requires a Desktop app OAuth client JSON with an "
+                "'installed' section. Create a Desktop app client in Google "
+                "Cloud, then download and select its JSON."
+            )
+        required = ("client_id", "client_secret", "auth_uri", "token_uri")
+        missing = [key for key in required
+                   if not isinstance(installed.get(key), str) or not installed[key].strip()]
+        if missing:
+            raise ValueError(
+                f"Gmail client JSON is missing: {', '.join(missing)}. "
+                "Download the complete Desktop app OAuth client JSON from "
+                "Google Cloud and select it again."
+            )
+        return config
+
     @classmethod
     def authenticate(cls, credentials_file=None):
         from google_auth_oauthlib.flow import InstalledAppFlow
         from googleapiclient.discovery import build
 
-        path = Path(credentials_file or os.environ.get(
-            "GMAIL_CLIENT_SECRET_FILE", "~/.config/EmailSiftingAgent/gmail-client.json"
-        )).expanduser()
-        flow = InstalledAppFlow.from_client_secrets_file(str(path), SCOPES)
-        credentials = flow.run_local_server(port=0)
+        flow = InstalledAppFlow.from_client_config(cls._client_config(credentials_file), SCOPES)
+        credentials = flow.run_local_server(port=0, timeout_seconds=180)
         client = build("gmail", "v1", credentials=credentials, cache_discovery=False)
         try:
             profile = client.users().getProfile(userId="me").execute()
@@ -40,8 +75,9 @@ class GmailAgent(EmailAgent):
 
     def logout(self):
         # Credentials are session-only and never written to disk.
-        self.client.close()
-        self.client = None
+        if self.client is not None:
+            self.client.close()
+            self.client = None
 
     def _messages(self):
         return self.client.users().messages()
@@ -78,8 +114,12 @@ class GmailAgent(EmailAgent):
             query.append(f"after:{int(lower.timestamp()) - 1}")
         if upper:
             query.append(f"before:{int(upper.timestamp()) + 1}")
-        emails = []
-        seen = set(checkpoint_ids)
+        # Gmail documents newest-first listing. Oldest-first needs every ID page,
+        # but only the selected batch needs metadata and MIME bodies.
+        ids = []
+        excluded = set(checkpoint_ids)
+        seen = set()
+        selected = []
         page = None
         while True:
             check_cancelled(cancel)
@@ -88,28 +128,59 @@ class GmailAgent(EmailAgent):
                 maxResults=500, pageToken=page,
             ).execute()
             check_cancelled(cancel)
-            for item in response.get("messages", []):
-                check_cancelled(cancel)
-                if item["id"] in seen:
-                    continue
-                record = self._messages().get(userId="me", id=item["id"], format="raw").execute()
-                check_cancelled(cancel)
-                email = self._email(record)
-                seen.add(email.id)
-                date = email.received_date_time
-                if lower and (date < lower or (date == lower and not oldest_first)):
-                    continue
-                if upper and date > upper:
-                    continue
-                emails.append(email)
+            candidates = [item["id"] for item in response.get("messages", [])]
+            if oldest_first:
+                ids.extend(candidates)
+            else:
+                selected.extend(self._select(candidates, max_emails - len(selected),
+                                             lower, upper, excluded, seen, cancel, oldest_first))
+                if len(selected) >= max_emails:
+                    break
             page = response.get("nextPageToken")
             if not page:
                 break
-        # Gmail does not offer an oldest-first list order. Read all candidate
-        # pages before limiting, otherwise a backlog can be skipped forever.
-        emails.sort(key=lambda email: (email.received_date_time, email.id),
-                    reverse=not oldest_first)
-        return emails[:max_emails]
+        if oldest_first:
+            selected = self._select(reversed(ids), max_emails, lower, upper,
+                                    excluded, seen, cancel, oldest_first)
+        emails = []
+        for message_id in selected:
+            check_cancelled(cancel)
+            record = self._messages().get(userId="me", id=message_id, format="raw").execute()
+            check_cancelled(cancel)
+            emails.append(self._email(record))
+        emails.sort(key=lambda email: (email.received_date_time, email.id), reverse=not oldest_first)
+        return emails
+
+    def _select(self, candidates, limit, lower, upper, excluded, seen, cancel, inclusive):
+        selected = []
+        for message_id in candidates:
+            check_cancelled(cancel)
+            if message_id in seen or message_id in excluded:
+                continue
+            seen.add(message_id)
+            metadata = self._messages().get(userId="me", id=message_id, format="minimal",
+                                            fields="id,internalDate").execute()
+            check_cancelled(cancel)
+            date = datetime.fromtimestamp(int(metadata["internalDate"]) / 1000, timezone.utc)
+            if lower and (date < lower or (date == lower and not inclusive)):
+                continue
+            if upper and date > upper:
+                continue
+            selected.append(message_id)
+            if len(selected) >= limit:
+                break
+        return selected
+
+    async def list_destinations(self):
+        labels = self.client.users().labels().list(userId="me").execute().get("labels", [])
+        self._labels = labels
+        return {"Archive": "archive", **{label["name"]: label["id"] for label in labels
+                                          if label.get("type") == "user"}}
+
+    async def close(self):
+        if self.client is not None:
+            self.client.close()
+            self.client = None
 
     async def delete(self, email):
         return self._messages().trash(userId="me", id=email.id).execute()
@@ -118,7 +189,9 @@ class GmailAgent(EmailAgent):
         if destination.lower() == "archive":
             added = []
         else:
-            labels = self.client.users().labels().list(userId="me").execute().get("labels", [])
+            labels = getattr(self, "_labels", None)
+            if labels is None:
+                labels = self.client.users().labels().list(userId="me").execute().get("labels", [])
             label = next((label for label in labels
                           if label["id"] == destination or label["name"] == destination), None)
             if label is None:

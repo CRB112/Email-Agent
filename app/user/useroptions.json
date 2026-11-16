@@ -5,21 +5,5 @@
   "dark_mode": false,
   "last_sift_at": null,
   "rules": [
-    {
-      "name": "Delete invoice emails",
-      "type": "match_subject_contains",
-      "settings": {
-        "Words": [
-          "invoice",
-          "payment due"
-        ],
-        "Type": "Any",
-        "CaseSensitive": false
-      },
-      "modify": {
-        "Delete": {}
-      },
-      "priority": 1
-    }
   ]
 }

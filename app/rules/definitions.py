@@ -57,13 +57,10 @@ FIELD_CHOICES = {
 
 def create_rule_template():
     match_type = "match_subject_contains"
-    action_type = "Mark"
     return {
         "name": "New rule",
         "type": match_type,
         "settings": copy.deepcopy(MATCH_DEFINITIONS[match_type]),
-        "modify": {
-            action_type: copy.deepcopy(ACTION_DEFINITIONS[action_type]),
-        },
+        "modify": {},
         "priority": 100,
     }

@@ -10,12 +10,13 @@ from app.widgets.rule_editor import RuleEditor
 
 
 class RuleCard(ttk.Frame):
-    def __init__(self, parent, rule, on_save=None, on_delete=None):
+    def __init__(self, parent, rule, on_save=None, on_delete=None, destinations=None):
         super().__init__(parent, padding=8)
         self.expanded = False
         self.rule = rule
         self.on_save = on_save
         self.on_delete = on_delete
+        self.destinations = destinations
         self.editor = None
         self.header_text = tk.StringVar()
 
@@ -65,7 +66,7 @@ class RuleCard(ttk.Frame):
         if self.on_delete is not None:
             ttk.Button(
                 actions,
-                text="Delete",
+                text="Delete rule",
                 command=self.confirm_delete,
                 bootstyle="danger outline",
             ).pack(side="left", padx=(0, 6))
@@ -73,7 +74,7 @@ class RuleCard(ttk.Frame):
         if self.on_save is not None:
             ttk.Button(
                 actions,
-                text="Edit",
+                text="Edit rule",
                 command=self.show_editor,
                 bootstyle="primary outline",
             ).pack(side="left")
@@ -89,6 +90,7 @@ class RuleCard(ttk.Frame):
             on_cancel=self.hide_editor,
             allow_match_type_changes=True,
             allow_action_type_changes=True,
+            destinations=self.destinations,
         )
         self.editor.pack(fill="x")
 

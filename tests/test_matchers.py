@@ -42,7 +42,6 @@ class MatcherTests(unittest.TestCase):
             ("All", ["invoice", "due"], False, True),
             ("Any", ["invoice"], True, False),
             ("Any", ["Invoice"], True, True),
-            ("Any", [], False, False),
         ]:
             with self.subTest(mode=mode, words=words, sensitive=sensitive):
                 matcher = COMMAND_CLASSES["match_subject_contains"](

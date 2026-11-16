@@ -2,6 +2,12 @@
 from abc import ABC, abstractmethod
 
 
+def sender_address(email):
+    sender = getattr(email, "from_", None)
+    address = getattr(sender, "email_address", None)
+    return getattr(address, "address", None) or ""
+
+
 class Match(ABC):
     @abstractmethod
     def testMatch(self, email) -> bool:
@@ -34,7 +40,7 @@ class Match_sender(Match):
         self.sender = settings["Sender"]
 
     def testMatch(self, email) -> bool:
-        address = email.from_.email_address.address
+        address = sender_address(email)
         return address.strip().lower() == self.sender.strip().lower()
 
 class Match_domain(Match):
@@ -42,7 +48,7 @@ class Match_domain(Match):
         self.domain = settings["Domain"]
 
     def testMatch(self, email) -> bool:
-        address = email.from_.email_address.address.strip().lower()
+        address = sender_address(email).strip().lower()
         try:
             _, domain = address.rsplit("@", 1)
         except ValueError:
@@ -52,6 +58,10 @@ class Match_domain(Match):
 class Match_contains(Match, ABC):
     def __init__(self, settings: dict):
         self.words = settings["Words"]
+        if not isinstance(self.words, list) or not self.words or any(
+            not isinstance(word, str) or not word.strip() for word in self.words
+        ):
+            raise ValueError("Enter at least one nonempty keyword")
         self.match_type = settings.get("Type", "All").lower()
         self.case_sensitive = settings.get("CaseSensitive", False)
 

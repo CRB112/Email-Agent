@@ -1,6 +1,4 @@
 import copy
-import tkinter as tk
-
 import ttkbootstrap as ttk
 
 from app.rules.definitions import ACTION_DEFINITIONS
@@ -8,32 +6,36 @@ from app.widgets.field_editor import FieldEditor, MarkFieldEditor
 
 
 class ActionListEditor(ttk.Frame):
-    def __init__(self, parent, actions, allow_changes=True):
+    DESCRIPTIONS = {
+        "Mark": "Change read status or importance without moving the email.",
+        "Move": "Choose a folder or Gmail label for matching emails.",
+        "Delete": "Delete matching emails after the other actions. Gmail moves them to Trash.",
+    }
+
+    def __init__(self, parent, actions, allow_changes=True, destinations=None):
         super().__init__(parent)
         self.actions = copy.deepcopy(actions)
         self.allow_changes = allow_changes
-        self.action_to_add = tk.StringVar()
+        self.destinations = destinations
         self._editors = {}
-
-        self.action_rows = ttk.Frame(self)
-        self.action_rows.pack(fill="x")
+        self.add_buttons = {}
+        self.remove_buttons = {}
 
         if allow_changes:
             controls = ttk.Frame(self)
-            controls.pack(fill="x", pady=(6, 0))
-            self.action_selector = ttk.Combobox(
-                controls,
-                textvariable=self.action_to_add,
-                state="readonly",
-                width=14,
-            )
-            self.action_selector.pack(side="left", fill="x", expand=True)
-            ttk.Button(
-                controls,
-                text="Add action",
-                command=self.add_action,
-                bootstyle="primary outline",
-            ).pack(side="left", padx=(6, 0))
+            controls.pack(fill="x", pady=(0, 8))
+            for column, action in enumerate(("Mark", "Move", "Delete")):
+                button = ttk.Button(
+                    controls, text=f"Add {action}",
+                    command=lambda name=action: self.add_action(name),
+                    bootstyle="danger outline" if action == "Delete" else "primary outline",
+                )
+                button.grid(row=0, column=column, sticky="ew", padx=(0 if column == 0 else 6, 0))
+                controls.grid_columnconfigure(column, weight=1, uniform="actions")
+                self.add_buttons[action] = button
+
+        self.action_rows = ttk.Frame(self)
+        self.action_rows.pack(fill="x")
 
         self._render()
 
@@ -43,10 +45,9 @@ class ActionListEditor(ttk.Frame):
             for action, editor in self._editors.items()
         }
 
-    def add_action(self):
+    def add_action(self, action):
         self._capture_values()
-        action = self.action_to_add.get()
-        if not action or action in self.actions:
+        if action in self.actions:
             return
         self.actions[action] = copy.deepcopy(ACTION_DEFINITIONS[action])
         self._render()
@@ -64,6 +65,7 @@ class ActionListEditor(ttk.Frame):
         for child in self.action_rows.winfo_children():
             child.destroy()
         self._editors = {}
+        self.remove_buttons = {}
 
         for action, settings in self.actions.items():
             action_box = ttk.LabelFrame(
@@ -72,34 +74,40 @@ class ActionListEditor(ttk.Frame):
                 padding=8,
             )
             action_box.pack(fill="x", pady=(0, 6))
+            action_box.grid_columnconfigure(0, weight=1)
+
+            description = ttk.Label(
+                action_box, text=self.DESCRIPTIONS[action],
+                wraplength=300, justify="left", bootstyle="secondary",
+            )
+            description.grid(row=0, column=0, sticky="ew", pady=(0, 6))
+            description.bind("<Configure>", lambda event: event.widget.configure(
+                wraplength=max(80, event.width)))
 
             editor_class = MarkFieldEditor if action == "Mark" else FieldEditor
-            editor = editor_class(action_box, settings)
-            editor.pack(side="left", fill="x", expand=True)
+            kwargs = {"destinations": self.destinations} if action == "Move" else {}
+            editor = editor_class(action_box, settings, **kwargs)
+            editor.grid(row=1, column=0, columnspan=2, sticky="ew")
             self._editors[action] = editor
 
             if self.allow_changes:
-                ttk.Button(
+                button = ttk.Button(
                     action_box,
-                    text="Remove",
+                    text=f"Remove {action}",
                     command=lambda name=action: self.remove_action(name),
                     bootstyle="danger outline",
-                ).pack(side="right", padx=(8, 0), anchor="n")
+                )
+                button.grid(row=0, column=1, sticky="ne", padx=(8, 0))
+                self.remove_buttons[action] = button
 
         if not self.actions:
             ttk.Label(
                 self.action_rows,
-                text="No actions added yet.",
+                text="No actions selected. Add an action above to configure what happens to matching emails.",
+                wraplength=350, justify="left",
                 bootstyle="secondary",
             ).pack(anchor="w", pady=4)
 
         if self.allow_changes:
-            available = [
-                action for action in ACTION_DEFINITIONS
-                if action not in self.actions
-            ]
-            self.action_selector.configure(
-                values=available,
-                state="readonly" if available else "disabled",
-            )
-            self.action_to_add.set(available[0] if available else "")
+            for action, button in self.add_buttons.items():
+                button.configure(state="disabled" if action in self.actions else "normal")

@@ -22,9 +22,15 @@ class FakeGraph:
         self.fail_on = fail_on
         self.me = self
         self.messages = self
+        self.mail_folders = self
 
     def by_message_id(self, message_id):
         return FakeMessage(self, message_id)
+
+    def by_mail_folder_id(self, folder_id):
+        async def get():
+            return SimpleNamespace(id=folder_id)
+        return SimpleNamespace(get=get)
 
     def record(self, message_id, action, **settings):
         if action == self.fail_on:
@@ -49,7 +55,7 @@ class FakeMessage:
             settings["importance"] = request_body.importance.value
         self.graph.record(self.message_id, "Mark", **settings)
 
-    async def post(self, request_body):
+    async def post(self, request_body, request_configuration=None):
         self.graph.record(self.message_id, "Move", folder=request_body.destination_id)
         return SimpleNamespace(id=f"moved-{self.message_id}")
 

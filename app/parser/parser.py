@@ -1,13 +1,13 @@
 import json
-import shutil
 import sys
+import os
 from pathlib import Path
 from app.parser.MatchCommands import COMMAND_CLASSES, Match_default
-from app.parser.ModifyCommands import MODIFY_CLASSES, Delete
-from app.services.control import check_cancelled
+from app.parser.ModifyCommands import MODIFY_CLASSES
+from app.rules.validation import validate_options
 
 APP_NAME = "EmailSiftingAgent"
-USER_OPTIONS_DIR = Path.home() / ".config" / APP_NAME
+USER_OPTIONS_DIR = Path(os.environ.get("EMAIL_SIFTING_DATA_DIR", Path.home() / ".config" / APP_NAME)).expanduser()
 OPTIONS_FILE = USER_OPTIONS_DIR / "useroptions.json"
 
 if getattr(sys, "frozen", False):
@@ -26,28 +26,27 @@ def ensureUserOptions() -> None:
     USER_OPTIONS_DIR.mkdir(parents=True, exist_ok=True)
 
     if not OPTIONS_FILE.exists():
-        shutil.copyfile(DEFAULT_OPTIONS_FILE, OPTIONS_FILE)
+        from app.services.journal import write_private_json
+        defaults = json.loads(DEFAULT_OPTIONS_FILE.read_text(encoding="utf-8"))
+        write_private_json(OPTIONS_FILE, validate_options(defaults))
 
 def loadUserOptions() -> dict:
     ensureUserOptions()
 
     with OPTIONS_FILE.open("r", encoding="utf-8") as f:
-        return json.load(f)
+        return validate_options(json.load(f))
 
 
 def saveUserOptions(options: dict) -> None:
+    validate_options(options)
     ensureUserOptions()
-    temporary_file = OPTIONS_FILE.with_suffix(".tmp")
-
-    with temporary_file.open("w", encoding="utf-8") as file:
-        json.dump(options, file, indent=2)
-        file.write("\n")
-
-    temporary_file.replace(OPTIONS_FILE)
+    from app.services.journal import write_private_json
+    write_private_json(OPTIONS_FILE, options)
 
 def parseUserOptions(options=None):
     if options is None:
         options = loadUserOptions()
+    validate_options(options)
     rules = sorted(
         options.get("rules", []),
         key=lambda rule: rule.get("priority", 100)
@@ -74,54 +73,8 @@ def parseUserOptions(options=None):
     return rulesObj
 
 async def parseEmailsWithJson(emails, graph_client, *, options=None, cancel=None, progress=None):
-    rules = parseUserOptions(options)
-    normal_rules = [
-        rule_data for rule_data in rules
-        if not isinstance(rule_data[0], Match_default)
-    ]
-    default_rules = [
-        rule_data for rule_data in rules
-        if isinstance(rule_data[0], Match_default)
-    ]
-    num_emails = 0
-    num_modifications = 0
-
-    for index, email in enumerate(emails):
-        check_cancelled(cancel)
-        deleted = False
-        matched_normal_rule = False
-        email_was_modified = False
-
-        for rule, modify in normal_rules:
-            if rule.testMatch(email):
-                matched_normal_rule = True
-                for m in modify:
-                    await m.modify(email, graph_client)
-                    num_modifications += 1
-                    email_was_modified = True
-                    if isinstance(m, Delete):
-                        deleted = True
-                        break
-
-            if deleted:
-                break
-
-        if not matched_normal_rule and not deleted:
-            for _, modify in default_rules:
-                for m in modify:
-                    await m.modify(email, graph_client)
-                    num_modifications += 1
-                    email_was_modified = True
-                    if isinstance(m, Delete):
-                        deleted = True
-                        break
-
-                if deleted:
-                    break
-
-        if email_was_modified:
-            num_emails += 1
-        if progress is not None:
-            progress(index + 1, len(emails))
-
-    return num_emails, num_modifications
+    from app.services.execution import plan_actions, execute_plan
+    if options is None:
+        options = loadUserOptions()
+    records = plan_actions(emails, options)
+    return await execute_plan(records, graph_client, cancel=cancel, progress=progress)

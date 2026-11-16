@@ -26,7 +26,7 @@ class ServiceTests(unittest.IsolatedAsyncioTestCase):
         result = await self.run_sift(report=progress)
         self.assertEqual((result.examined, result.modified, result.modifications), (2, 1, 1))
         self.assertEqual(result.settings_update["last_sift_ids"], ["one", "two"])
-        self.assertEqual(progress.call_args.args, ("Sifting emails...", 2, 2))
+        self.assertEqual(progress.call_args.args, ("Applying rules...", 2, 2))
 
     async def test_full_sift_does_not_update_checkpoint(self):
         result = await self.run_sift(mode="all")
@@ -138,7 +138,7 @@ class CompletionTests(unittest.TestCase):
         button = Mock()
         button.instate.return_value = False
         page = SimpleNamespace(controller=SimpleNamespace(closing=False, worker=Mock()),
-                               login_button=button, status=Mock(),
+                               login_button=button, gmail_setup_button=Mock(), status=Mock(),
                                _logged_in=Mock(), _login_failed=Mock())
         with patch("app.pages.login_page.authenticate") as authenticate:
             LoginPage.login(page)

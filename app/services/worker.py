@@ -11,8 +11,13 @@ class BackgroundWorker:
         self.jobs = Queue()
         self.events = Queue()
         self.closed = False
+        self.resources = []
         self.thread = Thread(target=self._run, name="mail-worker", daemon=True)
         self.thread.start()
+
+    def register_resource(self, resource):
+        self.resources.append(resource)
+        return resource
 
     def submit(self, operation, on_success, on_error, on_progress=None):
         if self.closed:
@@ -39,6 +44,15 @@ class BackgroundWorker:
                 else:
                     self.events.put((success, (result,)))
         finally:
+            for resource in self.resources:
+                try:
+                    result = resource.close()
+                    if inspect.isawaitable(result):
+                        loop.run_until_complete(result)
+                except Exception:
+                    # Cleanup must not prevent remaining sessions from closing.
+                    import logging
+                    logging.getLogger(__name__).exception("Could not close mailbox session")
             loop.run_until_complete(loop.shutdown_asyncgens())
             loop.close()
 

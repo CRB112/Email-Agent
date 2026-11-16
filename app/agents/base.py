@@ -5,6 +5,19 @@ from abc import ABC, abstractmethod
 class EmailAgent(ABC):
     mailbox_key = None
 
+    async def close(self):
+        """Release session resources without forgetting the account."""
+
+    async def list_destinations(self):
+        """Return a mapping of display names to provider destination IDs."""
+        raise NotImplementedError("This provider cannot list destinations")
+
+    async def validate_destinations(self, destinations):
+        available = await self.list_destinations()
+        unknown = set(destinations) - set(available) - set(available.values())
+        if unknown:
+            raise ValueError("Unknown destination(s): " + ", ".join(sorted(unknown)))
+
     @classmethod
     @abstractmethod
     def authenticate(cls):

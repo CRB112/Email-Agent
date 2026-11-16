@@ -4,6 +4,7 @@ from PyInstaller.utils.hooks import collect_data_files
 
 
 ttkbootstrap_data = collect_data_files("ttkbootstrap")
+gmail_data = collect_data_files("googleapiclient", includes=["discovery_cache/documents/gmail.v1.json"])
 
 analysis = Analysis(
     ["appROOT.py"],
@@ -13,6 +14,7 @@ analysis = Analysis(
         ("resources", "resources"),
         ("app/user/useroptions.json", "app/user"),
         *ttkbootstrap_data,
+        *gmail_data,
     ],
     hiddenimports=[
         "app",

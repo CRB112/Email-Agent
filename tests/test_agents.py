@@ -1,8 +1,11 @@
 import base64
+import json
+from pathlib import Path
+from tempfile import TemporaryDirectory
 from threading import Event
 from types import SimpleNamespace
 import unittest
-from unittest.mock import Mock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 from app.agents.base import EmailAgent, next_checkpoint
 from app.agents.gmail import GmailAgent
@@ -26,6 +29,7 @@ class AgentTests(unittest.IsolatedAsyncioTestCase):
         self.agent = GmailAgent(self.client)
 
     def inbox(self, records):
+        records = sorted(records, key=lambda record: (int(record["internalDate"]), record["id"]), reverse=True)
         self.messages.list.return_value.execute.side_effect = None
         self.messages.list.return_value.execute.return_value = {
             "messages": [{"id": r["id"]} for r in records]}
@@ -134,17 +138,18 @@ class AgentTests(unittest.IsolatedAsyncioTestCase):
     def test_gmail_login_runs_on_worker(self):
         page = SimpleNamespace(controller=SimpleNamespace(closing=False, worker=Mock()),
             login_button=Mock(), gmail_button=Mock(), status=Mock(),
+            gmail_setup_button=Mock(), gmail_credentials_file="/tmp/chosen-client.json",
             _logged_in=Mock(), _login_failed=Mock())
         page.login_button.instate.return_value = False
         with patch.object(GmailAgent, "authenticate") as authenticate:
             LoginPage.login_gmail(page)
             authenticate.assert_not_called()
             page.controller.worker.submit.call_args.args[0](Mock())
-            authenticate.assert_called_once()
+            authenticate.assert_called_once_with("/tmp/chosen-client.json")
 
     def test_login_clears_checkpoint_but_preserves_rules(self):
         page = SimpleNamespace(provider="gmail", login_button=Mock(), gmail_button=Mock(),
-                               controller=Mock(), _login_failed=Mock())
+                               gmail_setup_button=Mock(), controller=Mock(), _login_failed=Mock())
         options = {"rules": ["saved"], "last_sift_at": "old", "last_sift_ids": ["old-id"]}
         with patch("app.pages.login_page.loadUserOptions", return_value=options), \
              patch("app.pages.login_page.saveUserOptions") as save:
@@ -156,7 +161,7 @@ class AgentTests(unittest.IsolatedAsyncioTestCase):
         self.agent.mailbox_key = "gmail:person@example.com"
         options = {"mailbox_key": self.agent.mailbox_key, "last_sift_at": "old", "last_sift_ids": ["a"]}
         page = SimpleNamespace(provider="gmail", login_button=Mock(), gmail_button=Mock(),
-                               controller=Mock(), _login_failed=Mock())
+                               gmail_setup_button=Mock(), controller=Mock(), _login_failed=Mock())
         with patch("app.pages.login_page.loadUserOptions", return_value=options), \
              patch("app.pages.login_page.saveUserOptions") as save:
             LoginPage._logged_in(page, self.agent)
@@ -164,13 +169,96 @@ class AgentTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(save.call_args.args[0]["last_sift_ids"], ["a"])
 
     def test_gmail_authentication_uses_desktop_flow_and_account_identity(self):
-        with patch("google_auth_oauthlib.flow.InstalledAppFlow.from_client_secrets_file") as flow, \
+        config = {"installed": {
+            "client_id": "test-client", "client_secret": "test-secret",
+            "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+            "token_uri": "https://oauth2.googleapis.com/token",
+        }}
+        with TemporaryDirectory() as directory, \
+             patch("google_auth_oauthlib.flow.InstalledAppFlow.from_client_config") as flow, \
              patch("googleapiclient.discovery.build", return_value=self.client) as build:
+            path = Path(directory) / "client.json"
+            path.write_text(json.dumps(config), encoding="utf-8")
             self.client.users.return_value.getProfile.return_value.execute.return_value = {
                 "emailAddress": "Person@gmail.com"}
-            agent = GmailAgent.authenticate("/tmp/client.json")
+            agent = GmailAgent.authenticate(path)
         self.assertEqual(agent.mailbox_key, "gmail:person@gmail.com")
-        flow.assert_called_once_with("/tmp/client.json", ["https://www.googleapis.com/auth/gmail.modify"])
-        flow.return_value.run_local_server.assert_called_once_with(port=0)
+        flow.assert_called_once_with(config, ["https://www.googleapis.com/auth/gmail.modify"])
+        flow.return_value.run_local_server.assert_called_once_with(port=0, timeout_seconds=180)
         build.assert_called_once_with("gmail", "v1",
             credentials=flow.return_value.run_local_server.return_value, cache_discovery=False)
+
+
+class FetchEfficiencyTests(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
+        self.client = Mock()
+        self.messages = self.client.users.return_value.messages.return_value
+        self.agent = GmailAgent(self.client)
+        self.records = {str(index): record(str(index), index * 1000) for index in range(1, 1001)}
+        self.messages.get.side_effect = lambda **kw: Mock(execute=Mock(return_value=self.records[kw['id']]))
+
+    def pages(self):
+        self.messages.list.return_value.execute.side_effect = [
+            {'messages': [{'id': str(i)} for i in range(1000, 500, -1)], 'nextPageToken': 'second'},
+            {'messages': [{'id': str(i)} for i in range(500, 0, -1)]},
+        ]
+
+    async def test_oldest_batch_downloads_only_selected_bodies(self):
+        self.pages()
+        emails = await self.agent.get_emails(max_emails=10, oldest_first=True)
+        self.assertEqual([email.id for email in emails], [str(i) for i in range(1, 11)])
+        calls = [call.kwargs for call in self.messages.get.call_args_list]
+        self.assertEqual(sum(call['format'] == 'raw' for call in calls), 10)
+        self.assertEqual(sum(call['format'] == 'minimal' for call in calls), 10)
+        self.assertEqual(self.messages.list.call_count, 2)
+
+    async def test_newest_batch_stops_paging_when_full(self):
+        self.pages()
+        emails = await self.agent.get_emails(max_emails=10)
+        self.assertEqual([email.id for email in emails], [str(i) for i in range(1000, 990, -1)])
+        self.assertEqual(self.messages.list.call_count, 1)
+        self.assertEqual(self.messages.get.call_count, 20)
+
+    async def test_timestamp_ties_drain_even_when_server_reorders_ties(self):
+        self.records = {str(i): record(str(i), 1000) for i in range(35)}
+        at, ids = None, []
+        done = []
+        for run in range(4):
+            candidates = list(self.records)
+            if run % 2:
+                candidates.reverse()
+            self.messages.list.return_value.execute.return_value = {'messages': [{'id': i} for i in candidates]}
+            emails = await self.agent.get_emails(at, 10, oldest_first=True, checkpoint_ids=ids)
+            done.extend(email.id for email in emails)
+            at, ids = next_checkpoint(emails, at, ids, '1970-01-01T00:00:02Z')
+        self.assertEqual(len(done), 35)
+        self.assertEqual(set(done), set(self.records))
+
+
+class MicrosoftSessionTests(unittest.IsolatedAsyncioTestCase):
+    async def test_session_close_releases_http_client_and_credentials(self):
+        client = Mock()
+        client.email_sifting_http_client.aclose = AsyncMock()
+        credential = client.email_sifting_credential
+        agent = MicrosoftGraphAgent(client)
+        await agent.close()
+        await agent.close()
+        client.email_sifting_http_client.aclose.assert_awaited_once()
+        credential.close.assert_called_once()
+        self.assertIsNone(agent.client)
+
+    def test_authentication_uses_memory_cache_and_explicit_no_retry_transport(self):
+        from app.microsoftGraph import email as graph
+        with patch.object(graph, 'InteractiveBrowserCredential') as credential_class, \
+             patch.object(graph, 'GraphClientFactory') as factory, \
+             patch.object(graph, 'GraphRequestAdapter'), \
+             patch.object(graph, 'GraphServiceClient') as client_class:
+            credential_class.return_value.authenticate.return_value.home_account_id = 'account-id'
+            client = graph.authenticate()
+        settings = credential_class.call_args.kwargs
+        self.assertNotIn('cache_persistence_options', settings)
+        self.assertEqual(settings['timeout'], 180)
+        self.assertEqual(client.email_sifting_mailbox_key, 'microsoft:account-id')
+        from kiota_http.middleware.options import RetryHandlerOption
+        retry = factory.create_with_default_middleware.call_args.kwargs['options'][RetryHandlerOption.get_key()]
+        self.assertEqual(retry.max_retry, 0)

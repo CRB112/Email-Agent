@@ -12,6 +12,7 @@ from app.rules.definitions import (
 )
 from app.widgets.action_list_editor import ActionListEditor
 from app.widgets.field_editor import FieldEditor
+from app.rules.validation import validate_rule
 
 
 class RuleEditor(ttk.Frame):
@@ -22,7 +23,8 @@ class RuleEditor(ttk.Frame):
         on_save,
         on_cancel,
         allow_match_type_changes=False,
-        allow_action_type_changes=False,
+        allow_action_type_changes=True,
+        destinations=None,
     ):
         super().__init__(parent, padding=(10, 8))
         self.rule = copy.deepcopy(rule)
@@ -53,6 +55,7 @@ class RuleEditor(ttk.Frame):
             self,
             self.rule.get("modify", {}),
             allow_changes=allow_action_type_changes,
+            destinations=destinations,
         )
         self.action_editor.grid(row=4, column=1, sticky="ew", pady=3)
 
@@ -103,6 +106,9 @@ class RuleEditor(ttk.Frame):
             self.rule.get("settings", {}),
         )
         self.condition_editor.pack(fill="x")
+        if self.rule.get("type") == "match_default":
+            ttk.Label(self.condition_container, text="Applies to every message that matches no other rule.",
+                      wraplength=400, bootstyle="warning").pack(anchor="w", pady=4)
 
     def _change_match_type(self, _event):
         match_type = MATCH_TYPES_BY_LABEL[self.match_type_display.get()]
@@ -146,6 +152,7 @@ class RuleEditor(ttk.Frame):
         self.rule["modify"] = actions
 
         try:
+            validate_rule(self.rule)
             self.on_save(self.rule)
         except Exception as error:
             self.error.config(text=f"Could not save rule: {error}")

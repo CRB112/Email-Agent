@@ -1,13 +1,9 @@
-from pathlib import Path
-
 import ttkbootstrap as ttk
+from tkinter import messagebox
 
 from app.services.worker import BackgroundWorker
 from app.pages.pages import PAGES_LIST
 from app.parser.parser import loadUserOptions
-
-AUTH_RECORD_FILE = Path.home() / ".email-sifting-auth.json"
-
 
 def get_saved_theme():
     try:
@@ -39,6 +35,14 @@ class MainWindow(ttk.Window):
 
         self.pages = {}
 
+        try:
+            loadUserOptions()
+        except Exception as error:
+            messagebox.showerror("Settings need repair", f"{error}\n\nYour settings were preserved. Repair ~/.config/EmailSiftingAgent/useroptions.json and restart.", parent=self)
+            self.worker.close()
+            self.destroy()
+            raise SystemExit(1) from error
+
         for page_name, page_class in PAGES_LIST.items():
             page = page_class(container, self)
             self.pages[page_name] = page
@@ -51,12 +55,12 @@ class MainWindow(ttk.Window):
 
         self.show_page("Login")
         self.after(50, self._poll_worker)
-        if AUTH_RECORD_FILE.exists() and loadUserOptions().get("provider", "microsoft") == "microsoft":
-            self.after(0, self.pages["Login"].login)
 
     def _poll_worker(self):
         if self.closing:
+            self.worker.drain()
             if not self.worker.thread.is_alive():
+                self.worker.drain()
                 self.destroy()
                 return
         else:
@@ -87,5 +91,18 @@ class MainWindow(ttk.Window):
 
 
 if __name__ == "__main__":
+    import sys
+    if "--check-install" in sys.argv:
+        from app.parser.parser import DEFAULT_OPTIONS_FILE
+        from app.rules.validation import validate_options
+        import json
+        validate_options(json.loads(DEFAULT_OPTIONS_FILE.read_text(encoding="utf-8")))
+        # Loading discovery from the packaged SDK catches missing Gmail data.
+        from googleapiclient.discovery import build
+        from google.auth.credentials import AnonymousCredentials
+        client = build("gmail", "v1", credentials=AnonymousCredentials(), cache_discovery=False, static_discovery=True)
+        client.close()
+        print("Installation OK: providers, UI imports, Gmail discovery, bundled defaults.")
+        raise SystemExit(0)
     app = MainWindow()
     app.mainloop()
